@@ -205,11 +205,10 @@ export class PaperSim {
     return this.mode === 'free' || this.mode === 'settling';
   }
 
-  pointerDown(x: number, y: number) {
-    if (this.mode === 'printing') return;
-    // grab the nearest point if the hand is on the sheet
+  /** The sheet's point nearest to (x, y), or -1 if the hand is not on the sheet. */
+  private nearest(x: number, y: number) {
     let best = -1;
-    let bestD = 60 * 60;
+    let bestD = 48 * 48;
     for (let k = 0; k < COLS * ROWS; k++) {
       const dx = this.pos[k * 2] - x;
       const dy = this.pos[k * 2 + 1] - y;
@@ -219,7 +218,19 @@ export class PaperSim {
         best = k;
       }
     }
-    if (best < 0) return;
+    return best;
+  }
+
+  /** Is the hand over the sheet (and can it be grabbed right now)? */
+  hitTest(x: number, y: number) {
+    return this.mode !== 'printing' && this.nearest(x, y) >= 0;
+  }
+
+  /** Grab the sheet. Returns false if the hand missed it. */
+  pointerDown(x: number, y: number) {
+    if (this.mode === 'printing') return false;
+    const best = this.nearest(x, y);
+    if (best < 0) return false;
     this.grabbed = best;
     this.pointer.set(x, y);
     this.lastPointer.set(x, y);
@@ -231,6 +242,7 @@ export class PaperSim {
     } else {
       this.grabOffset.set(this.pos[best * 2] - x, this.pos[best * 2 + 1] - y);
     }
+    return true;
   }
 
   pointerMove(x: number, y: number) {

@@ -2,24 +2,45 @@ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } f
 import type { CoffeeScene } from '../scene/CoffeeScene';
 import type { PaperSim } from '../scene/PaperSim';
 import Printer, { PRINTER_SLOT_Y, PRINTER_VIEW_W } from './Printer';
+import { FILL, buttonQuiet, pill } from './ui';
+import FillButton from './FillButton';
 import { RECEIPT_HEIGHT, RECEIPT_WIDTH, drawReceiptBase, drawReceiptFrame, type ReceiptData } from '../receipt/draw';
+import { encodeGif, downloadBlob } from '../receipt/gif';
+import Polaroid from './Polaroid';
 
-type State = 'printing' | 'attached' | 'torn';
+export type ReceiptState = 'printing' | 'attached' | 'torn';
+type State = ReceiptState;
 const FPS = 10;
 const HOLD_FRAMES = 10; // pause on the finished cup before the loop restarts
 const PRINTER_TOP = 12;
-
-const label = 'font-mono text-[11px] tracking-wide uppercase';
 
 /**
  * The receipt UI. The sheet itself is simulated and drawn by the scene (PaperSim); this component
  * draws the receipt image into an offscreen canvas, plays the time-lapse, and forwards the hand.
  */
-export default function Receipt({ data, scene, onAgain }: { data: ReceiptData; scene: CoffeeScene; onAgain: () => void }) {
+export default function Receipt({
+  data,
+  scene,
+  onAgain,
+  onState,
+}: {
+  data: ReceiptData;
+  scene: CoffeeScene;
+  onAgain: () => void;
+  onState?: (state: ReceiptState) => void;
+}) {
   const paperRef = useRef<PaperSim | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [state, setState] = useState<State>('printing');
+  const [state, setStateRaw] = useState<State>('printing');
+  const setState = (s: State) => {
+    setStateRaw(s);
+    onState?.(s);
+  };
   const dragging = useRef(false);
+  const [cursor, setCursor] = useState<'default' | 'grab' | 'grabbing'>('default');
+  const drawRef = useRef<((index: number) => void) | null>(null);
+  const gifRef = useRef<Blob | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
 
   // as big as the screen allows, up to 1.4x the base design
   const scale = Math.min(1.4, (window.innerWidth - 40) / RECEIPT_WIDTH, (window.innerHeight - 150) / RECEIPT_HEIGHT);
@@ -54,6 +75,7 @@ export default function Receipt({ data, scene, onAgain }: { data: ReceiptData; s
       drawReceiptFrame(ctx, data, Math.min(index, data.frames.length - 1), RECEIPT_WIDTH, dpr, scratch);
     };
     draw(0);
+    drawRef.current = draw;
 
     const paper = scene.showPaper(canvas, { width, height, slotY }, {
       onPrinted: () => setState('attached'),
@@ -82,16 +104,52 @@ export default function Receipt({ data, scene, onAgain }: { data: ReceiptData; s
   }, [data, scene, width, height, scale, slotY]);
 
   const onPointerDown = (e: ReactPointerEvent) => {
+    if (!paperRef.current?.pointerDown(e.clientX, e.clientY)) return; // missed the sheet
     dragging.current = true;
+    setCursor('grabbing');
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    paperRef.current?.pointerDown(e.clientX, e.clientY);
   };
   const onPointerMove = (e: ReactPointerEvent) => {
-    if (dragging.current) paperRef.current?.pointerMove(e.clientX, e.clientY);
+    const paper = paperRef.current;
+    if (!paper) return;
+    if (dragging.current) paper.pointerMove(e.clientX, e.clientY);
+    else setCursor(paper.hitTest(e.clientX, e.clientY) ? 'grab' : 'default');
   };
-  const onPointerUp = () => {
+  const onPointerUp = (e: ReactPointerEvent) => {
     dragging.current = false;
     paperRef.current?.pointerUp();
+    setCursor(paperRef.current?.hitTest(e.clientX, e.clientY) ? 'grab' : 'default');
+  };
+
+  // the receipt as a looping GIF, at design size
+  const makeGif = async () => {
+    if (gifRef.current) return gifRef.current;
+    const source = canvasRef.current;
+    const draw = drawRef.current;
+    if (!source || !draw) throw new Error('receipt not ready');
+    const blob = await encodeGif({
+      width: RECEIPT_WIDTH,
+      height: RECEIPT_HEIGHT,
+      frames: data.frames.length + HOLD_FRAMES,
+      fps: FPS,
+      draw: (ctx, i) => {
+        draw(Math.min(i, data.frames.length - 1));
+        ctx.fillStyle = '#e6cfa6';
+        ctx.fillRect(0, 0, RECEIPT_WIDTH, RECEIPT_HEIGHT);
+        ctx.drawImage(source, 0, 0, RECEIPT_WIDTH, RECEIPT_HEIGHT);
+      },
+      onProgress: (p) => setBusy(`Making GIF ${Math.round(p * 100)}%`),
+    });
+    gifRef.current = blob;
+    return blob;
+  };
+  const gifName = `stir-receipt-${String(data.orderNo).padStart(4, '0')}.gif`;
+
+  const downloadGif = async () => {
+    if (busy) return;
+    const blob = await makeGif();
+    setBusy(null);
+    downloadBlob(blob, gifName);
   };
 
   const save = () => {
@@ -108,7 +166,7 @@ export default function Receipt({ data, scene, onAgain }: { data: ReceiptData; s
 
   return (
     <div
-      className={`absolute inset-0 touch-none ${state === 'printing' ? 'cursor-wait' : 'cursor-grab active:cursor-grabbing'}`}
+      className={`absolute inset-0 touch-none ${cursor === 'grabbing' ? 'cursor-grabbing' : cursor === 'grab' ? 'cursor-grab' : 'cursor-default'}`}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
@@ -116,16 +174,24 @@ export default function Receipt({ data, scene, onAgain }: { data: ReceiptData; s
     >
       <Printer width={printerWidth} top={PRINTER_TOP} />
 
+      <Polaroid data={data} visible={state === 'torn'} />
+
       {/* hints and actions */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center gap-3 p-8 pb-[max(2rem,env(safe-area-inset-bottom))]">
-        <p className={`${label} transition-opacity duration-500 ${state === 'attached' ? 'opacity-70' : 'opacity-0'}`}>Grab the receipt and pull it off</p>
-        <div className={`flex gap-2 transition-all duration-500 ${state === 'torn' ? 'pointer-events-auto translate-y-0 opacity-100' : 'translate-y-4 opacity-0'}`}>
-          <button type="button" onClick={save} onPointerDown={(e) => e.stopPropagation()} className="rounded-full bg-ink px-5 py-2.5 text-sm font-medium text-paper transition-colors hover:bg-sage hover:text-ink">
-            Save receipt
-          </button>
-          <button type="button" onClick={onAgain} onPointerDown={(e) => e.stopPropagation()} className="rounded-full border border-ink/20 px-5 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-ink/10">
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center gap-3 p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+        <p className={`${pill} px-4 py-2 text-[14px] transition-opacity duration-500 md:hidden ${state === 'attached' ? 'opacity-100' : 'opacity-0'}`}>Grab the receipt and pull it off</p>
+        <div className={`flex flex-wrap justify-center gap-3 transition-all duration-500 ${state === 'torn' ? 'pointer-events-auto translate-y-0 opacity-100' : 'translate-y-4 opacity-0'}`}>
+          <div className={`${pill} cursor-default gap-2 pl-4`} onPointerDown={(e) => e.stopPropagation()}>
+            <span className="text-[14px] font-medium text-ink/70">Save receipt</span>
+            <FillButton type="button" onClick={save} fill={FILL.ink} textOnFill={FILL.paper} className="rounded-full border-2 border-ink bg-paper-light px-4 py-2 text-[14px] font-medium">
+              PNG
+            </FillButton>
+            <FillButton type="button" onClick={downloadGif} disabled={!!busy} fill={FILL.ink} textOnFill={FILL.paper} className="rounded-full border-2 border-ink bg-paper-light px-4 py-2 text-[14px] font-medium disabled:opacity-60">
+              {busy ?? 'GIF'}
+            </FillButton>
+          </div>
+          <FillButton type="button" onClick={onAgain} onPointerDown={(e) => e.stopPropagation()} fill={FILL.ink} textOnFill={FILL.paper} className={buttonQuiet}>
             Another cup
-          </button>
+          </FillButton>
         </div>
       </div>
     </div>

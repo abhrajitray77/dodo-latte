@@ -209,8 +209,8 @@ export class CoffeeScene {
   private brush: BrushSize = 'xl';
   private flow = 0.5;
   // time-lapse and numbers for the receipt
-  private recorder = new Recorder(96);
-  private frameBuf = new Uint8Array(96 * 96 * 4);
+  private recorder = new Recorder(144);
+  private frameBuf = new Uint8Array(144 * 144 * 4);
   private stats = { strokes: 0, pourSeconds: 0, stirSeconds: 0 };
   private paper: PaperSim | null = null;
   private strokeChanged = false;
