@@ -12,9 +12,24 @@
     "astro": "astro"
   },
   "dependencies": {
-    "astro": "^7.3.6"
+    "@astrojs/react": "^7.0.1",
+    "@gsap/react": "^2.1.2",
+    "@paper-design/shaders": "0.0.81",
+    "@paper-design/shaders-react": "0.0.81",
+    "@tailwindcss/vite": "^4.3.3",
+    "astro": "^7.3.6",
+    "gsap": "^3.15.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "tailwindcss": "^4.3.3",
+    "three": "^0.186.1"
   },
   "allowScripts": {
     "esbuild": true
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@types/three": "^0.186.0"
   }
 }

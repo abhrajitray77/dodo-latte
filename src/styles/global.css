@@ -1,0 +1,41 @@
+@import "tailwindcss";
+
+/*
+  Display font: Apfel Grotezk (free, by Collletttivo) as a quiet nod to Dodo's own display face.
+  Drop ApfelGrotezk-Regular.woff2 / ApfelGrotezk-Mittel.woff2 into public/fonts (check the license).
+  Until then the stack falls back to Inter / system UI.
+*/
+@font-face {
+  font-family: "Apfel Grotezk";
+  src: url("/fonts/ApfelGrotezk-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Apfel Grotezk";
+  src: url("/fonts/ApfelGrotezk-Mittel.woff2") format("woff2");
+  font-weight: 500;
+  font-display: swap;
+}
+
+@theme {
+  --font-display: "Apfel Grotezk", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+  /* Dodo palette + coffee */
+  --color-ink: #00160d;
+  --color-lime: #c6fe1e;
+  --color-paper: #f4f1ea;
+  --color-crema: #c08a55;
+  --color-coffee: #3d2214;
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
