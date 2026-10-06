@@ -12,15 +12,17 @@ export type BrushSize = 's' | 'm' | 'l' | 'xl';
 const BRUSH: Record<BrushSize, number> = { s: 0.00018, m: 0.0005, l: 0.0012, xl: 0.0028 };
 
 /*
-  Look: flat retro-poster illustration. Two-tone shading with a hard terminator, no outlines,
-  a warm stoneware cup with a soft inner gradient, lit from the top right.
+  Look: inked illustration with flat Pantone-style fills. Solid jade cup, ink outlines, pen hatching
+  on the side away from the light, no shading gradients.
 */
 const PALETTE = {
-  cupLight: '#dccfbc',
-  cupShadow: '#8e7a66',
-  creamLight: '#e3d7c5',
-  creamShadow: '#a38f78',
+  jade: '#9fbb9a',
+  jadeHatch: '#5f7a5c',
+  inside: '#e0e4d2',
+  ink: '#2b1d12',
 };
+/** Ink outline width in CSS px. */
+const OUTLINE_PX = 2.4;
 
 // Teacup proportions (world units)
 const FOOT_R = 0.34;
@@ -63,63 +65,79 @@ function rimProfile() {
   ];
 }
 
-/** Flat two-tone material: light side and shadow side, hard edge. */
-function twoTone(light: string, shadow: string) {
+/**
+ * Flat "Pantone" fill with ink hatching: one solid colour, no shading, plus thin pen strokes on the
+ * side away from the light (densest just past where a shadow would start). `alongX` picks which uv
+ * axis the strokes follow (tubes run the other way round to lathes); amount 0 turns them off.
+ */
+function flatInk(fill: string, hatch = PALETTE.jadeHatch, alongX = false, freq = 46, amount = 1) {
   return new THREE.ShaderMaterial({
     uniforms: {
-      uLight: { value: new THREE.Color(light) },
-      uShadow: { value: new THREE.Color(shadow) },
+      uFill: { value: new THREE.Color(fill) },
+      uHatch: { value: new THREE.Color(hatch) },
+      uAmount: { value: amount },
       uLightDir: { value: LIGHT_DIR },
     },
+    defines: { HATCH_COORD: alongX ? 'vUv.x' : 'vUv.y', HATCH_FREQ: freq.toFixed(1) },
     vertexShader: /* glsl */ `
       varying vec3 vNormal;
+      varying vec2 vUv;
       void main() {
+        vUv = uv;
         vNormal = normalize(mat3(modelMatrix) * normal);
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
       }
     `,
     fragmentShader: /* glsl */ `
-      uniform vec3 uLight;
-      uniform vec3 uShadow;
+      uniform vec3 uFill;
+      uniform vec3 uHatch;
+      uniform float uAmount;
       uniform vec3 uLightDir;
       varying vec3 vNormal;
+      varying vec2 vUv;
       void main() {
         float d = dot(normalize(vNormal), uLightDir);
-        float lit = smoothstep(-0.12, -0.08, d);
-        gl_FragColor = vec4(mix(uShadow, uLight, lit), 1.0);
+        float stroke = 1.0 - smoothstep(0.07, 0.13, fract(HATCH_COORD * HATCH_FREQ));
+        float zone = (1.0 - smoothstep(-0.12, 0.0, d)) * (1.0 - smoothstep(-0.3, -0.8, d) * 0.75);
+        vec3 col = mix(uFill, uHatch, stroke * zone * uAmount);
+        gl_FragColor = vec4(col, 1.0);
         #include <colorspace_fragment>
       }
     `,
   });
 }
 
-/** Inside of the cup: flat cream, softly darker toward the coffee. No hard terminator. */
-function innerCream(light: string, shadow: string) {
-  return new THREE.ShaderMaterial({
-    uniforms: { uLight: { value: new THREE.Color(light) }, uShadow: { value: new THREE.Color(shadow) } },
-    vertexShader: /* glsl */ `
-      varying float vY;
-      varying vec3 vNormal;
-      void main() {
-        vY = position.y;
-        vNormal = normalize(mat3(modelMatrix) * normal);
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-      }
-    `,
-    fragmentShader: /* glsl */ `
-      uniform vec3 uLight;
-      uniform vec3 uShadow;
-      varying float vY;
-      varying vec3 vNormal;
-      void main() {
-        float k = smoothstep(${COFFEE_Y.toFixed(3)}, ${(RIM_Y - 0.02).toFixed(3)}, vY);
-        // the top of the lip stays fully lit
-        k = max(k, smoothstep(0.6, 0.9, normalize(vNormal).y));
-        gl_FragColor = vec4(mix(mix(uShadow, uLight, 0.45), uLight, k), 1.0);
-        #include <colorspace_fragment>
-      }
-    `,
-  });
+/**
+ * Ink outline: the same mesh drawn inside-out and pushed out along its normals by a constant
+ * number of screen pixels, so the line stays the same width from both camera angles.
+ */
+const outlineMaterial = new THREE.ShaderMaterial({
+  uniforms: { uInk: { value: new THREE.Color(PALETTE.ink) }, uPx: { value: OUTLINE_PX }, uK: { value: 0.001 } },
+  side: THREE.BackSide,
+  vertexShader: /* glsl */ `
+    uniform float uPx;
+    uniform float uK; // world units per pixel at distance 1
+    void main() {
+      vec4 mv = modelViewMatrix * vec4(position, 1.0);
+      vec3 n = normalize(normalMatrix * normal);
+      mv.xyz += n * uPx * uK * -mv.z;
+      gl_Position = projectionMatrix * mv;
+    }
+  `,
+  fragmentShader: /* glsl */ `
+    uniform vec3 uInk;
+    void main() {
+      gl_FragColor = vec4(uInk, 1.0);
+      #include <colorspace_fragment>
+    }
+  `,
+});
+
+/** A mesh plus its ink outline. */
+function inked(geometry: THREE.BufferGeometry, material: THREE.Material) {
+  const group = new THREE.Group();
+  group.add(new THREE.Mesh(geometry, material), new THREE.Mesh(geometry, outlineMaterial));
+  return group;
 }
 
 /** Outer radius of the bowl at height y (for attaching the handle). */
@@ -151,7 +169,9 @@ const coffeeFragment = /* glsl */ `
   void main() {
     vec3 col = texture2D(uDye, vUv).rgb;
     float r = length(vUv - 0.5) * 2.0;
-    col = mix(col, vec3(0.17, 0.08, 0.05), smoothstep(0.92, 1.0, r) * 0.6);
+    col = mix(col, vec3(0.17, 0.08, 0.05), smoothstep(0.9, 1.0, r) * 0.6);
+    // inked edge where the coffee meets the cup
+    col = mix(col, vec3(0.1, 0.06, 0.04), smoothstep(0.972, 0.988, r));
     // warm lamp from the top right: brighter there, a little darker toward the bottom left
     float lamp = smoothstep(1.1, 0.0, length(vUv - vec2(0.78, 0.8)));
     col *= mix(0.86, 1.06, lamp);
@@ -209,13 +229,13 @@ export class CoffeeScene {
     this.fluid = new Fluid(this.renderer, 128, px > 1100 ? 1024 : 512);
 
 
-    // cup body (two-tone) + rim and inner bowl (cream)
+    // cup body (flat jade with pen hatching), rim and inner bowl (flat pale), all with ink outlines
     const body = new THREE.LatheGeometry(bodyProfile(), 96);
     body.computeVertexNormals();
-    this.cup.add(new THREE.Mesh(body, twoTone(PALETTE.cupLight, PALETTE.cupShadow)));
+    this.cup.add(inked(body, flatInk(PALETTE.jade)));
     const rim = new THREE.LatheGeometry(rimProfile(), 96);
     rim.computeVertexNormals();
-    this.cup.add(new THREE.Mesh(rim, innerCream(PALETTE.creamLight, PALETTE.creamShadow)));
+    this.cup.add(inked(rim, flatInk(PALETTE.inside, PALETTE.jadeHatch, false, 0, 0)));
 
     // thick looped handle: both ends start inside the wall so it always stays attached
     const topY = 0.7;
@@ -229,7 +249,7 @@ export class CoffeeScene {
       bottom
     );
     const handle = new THREE.TubeGeometry(handleCurve, 48, 0.062, 20, false);
-    this.cup.add(new THREE.Mesh(handle, twoTone(PALETTE.cupLight, PALETTE.cupShadow)));
+    this.cup.add(inked(handle, flatInk(PALETTE.jade, PALETTE.jadeHatch, true, 30)));
 
     // coffee surface, shaded from the fluid
     this.coffee = new THREE.Mesh(
@@ -396,6 +416,12 @@ export class CoffeeScene {
     this.checkpoint();
   }
 
+  /** World units per screen pixel at distance 1, for the outline width. */
+  private updateOutlineScale() {
+    const fov = THREE.MathUtils.degToRad(this.camera.getEffectiveFOV());
+    outlineMaterial.uniforms.uK.value = (2 * Math.tan(fov / 2)) / Math.max(1, this.canvas.clientHeight);
+  }
+
   private applyCamera() {
     const t = this.cam.t;
     const a = CAMERA.hero;
@@ -405,6 +431,7 @@ export class CoffeeScene {
     this.camera.lookAt(new THREE.Vector3().lerpVectors(a.target, b.target, t));
     this.camera.fov = THREE.MathUtils.lerp(a.fov, b.fov, t);
     this.camera.updateProjectionMatrix();
+    this.updateOutlineScale();
   }
 
   private resize = () => {
@@ -415,6 +442,7 @@ export class CoffeeScene {
     // keep the cup comfortably framed on tall phones
     this.camera.zoom = w / h < 0.75 ? 0.68 : 1;
     this.camera.updateProjectionMatrix();
+    this.updateOutlineScale();
     this.paper?.resize(w, h);
   };
 

@@ -135,7 +135,7 @@ export class PaperSim {
     );
     this.scene.add(this.paper);
 
-    this.dim = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: 0x140d09, transparent: true, opacity: 0, depthWrite: false }));
+    this.dim = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: 0x2b1d12, transparent: true, opacity: 0, depthWrite: false }));
     this.dimScene.add(this.dim);
 
     this.camera.position.z = 10;
@@ -284,7 +284,7 @@ export class PaperSim {
         this.pos[k * 2] = this.prev[k * 2] = this.rest[k * 2];
         this.pos[k * 2 + 1] = this.prev[k * 2 + 1] = this.rest[k * 2 + 1] + offset;
       }
-      (this.dim.material as THREE.MeshBasicMaterial).opacity = 0.7 * Math.min(1, this.time / 0.8);
+      (this.dim.material as THREE.MeshBasicMaterial).opacity = 0.5 * Math.min(1, this.time / 0.8);
       if (t >= 1) {
         this.mode = 'hanging';
         for (let k = COLS; k < n; k++) this.pinned[k] = 0;

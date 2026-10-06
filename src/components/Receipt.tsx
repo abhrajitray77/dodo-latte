@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import type { CoffeeScene } from '../scene/CoffeeScene';
 import type { PaperSim } from '../scene/PaperSim';
+import Printer, { PRINTER_SLOT_Y, PRINTER_VIEW_W } from './Printer';
 import { RECEIPT_HEIGHT, RECEIPT_WIDTH, drawReceiptBase, drawReceiptFrame, type ReceiptData } from '../receipt/draw';
 
 type State = 'printing' | 'attached' | 'torn';
 const FPS = 10;
 const HOLD_FRAMES = 10; // pause on the finished cup before the loop restarts
-const SLOT_Y = 28;
+const PRINTER_TOP = 12;
 
 const label = 'font-mono text-[11px] tracking-wide uppercase';
 
@@ -24,6 +25,9 @@ export default function Receipt({ data, scene, onAgain }: { data: ReceiptData; s
   const scale = Math.min(1.4, (window.innerWidth - 40) / RECEIPT_WIDTH, (window.innerHeight - 150) / RECEIPT_HEIGHT);
   const width = RECEIPT_WIDTH * scale;
   const height = RECEIPT_HEIGHT * scale;
+  // the printer artwork is a little wider than the paper; the paper starts at its slot
+  const printerWidth = width + 100;
+  const slotY = PRINTER_TOP + (printerWidth / PRINTER_VIEW_W) * PRINTER_SLOT_Y;
 
   useEffect(() => {
     // render at the displayed size so the type stays crisp
@@ -51,7 +55,7 @@ export default function Receipt({ data, scene, onAgain }: { data: ReceiptData; s
     };
     draw(0);
 
-    const paper = scene.showPaper(canvas, { width, height, slotY: SLOT_Y }, {
+    const paper = scene.showPaper(canvas, { width, height, slotY }, {
       onPrinted: () => setState('attached'),
       onTorn: () => setState('torn'),
     });
@@ -75,7 +79,7 @@ export default function Receipt({ data, scene, onAgain }: { data: ReceiptData; s
       scene.hidePaper();
       paperRef.current = null;
     };
-  }, [data, scene, width, height, scale]);
+  }, [data, scene, width, height, scale, slotY]);
 
   const onPointerDown = (e: ReactPointerEvent) => {
     dragging.current = true;
@@ -110,20 +114,16 @@ export default function Receipt({ data, scene, onAgain }: { data: ReceiptData; s
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
     >
-      {/* printer slot */}
-      <div
-        className="pointer-events-none absolute left-1/2 h-4 -translate-x-1/2 rounded-full bg-[#0a0705] shadow-[inset_0_2px_3px_rgba(255,255,255,0.08),0_6px_18px_rgba(0,0,0,0.5)]"
-        style={{ width: width + 48, top: SLOT_Y - 8 }}
-      />
+      <Printer width={printerWidth} top={PRINTER_TOP} />
 
       {/* hints and actions */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center gap-3 p-8 pb-[max(2rem,env(safe-area-inset-bottom))]">
         <p className={`${label} transition-opacity duration-500 ${state === 'attached' ? 'opacity-70' : 'opacity-0'}`}>Grab the receipt and pull it off</p>
         <div className={`flex gap-2 transition-all duration-500 ${state === 'torn' ? 'pointer-events-auto translate-y-0 opacity-100' : 'translate-y-4 opacity-0'}`}>
-          <button type="button" onClick={save} onPointerDown={(e) => e.stopPropagation()} className="rounded-full bg-cream px-5 py-2.5 text-sm font-medium text-espresso transition-colors hover:bg-caramel hover:text-cream">
+          <button type="button" onClick={save} onPointerDown={(e) => e.stopPropagation()} className="rounded-full bg-ink px-5 py-2.5 text-sm font-medium text-paper transition-colors hover:bg-sage hover:text-ink">
             Save receipt
           </button>
-          <button type="button" onClick={onAgain} onPointerDown={(e) => e.stopPropagation()} className="rounded-full border border-cream/20 px-5 py-2.5 text-sm font-medium text-cream transition-colors hover:bg-cream/10">
+          <button type="button" onClick={onAgain} onPointerDown={(e) => e.stopPropagation()} className="rounded-full border border-ink/20 px-5 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-ink/10">
             Another cup
           </button>
         </div>

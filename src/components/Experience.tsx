@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { CoffeeScene, type BrushSize } from '../scene/CoffeeScene';
 import Receipt from './Receipt';
+import Beans from './Beans';
 import type { ReceiptData } from '../receipt/draw';
 
 type Phase = 'hero' | 'gliding' | 'art' | 'stir' | 'receipt';
@@ -13,8 +14,8 @@ const BRUSHES: Array<{ id: BrushSize; dot: number }> = [
   { id: 'xl', dot: 16 },
 ];
 
-const pill = 'flex items-center gap-1.5 rounded-full border border-cream/10 bg-espresso/85 p-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.35)] backdrop-blur';
-const iconButton = 'grid h-9 w-9 place-items-center rounded-full transition-colors duration-200 hover:bg-cream/5 disabled:opacity-30 disabled:hover:bg-transparent';
+const pill = 'flex items-center gap-1.5 rounded-full border border-ink/10 bg-paper/85 p-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.35)] backdrop-blur';
+const iconButton = 'grid h-9 w-9 place-items-center rounded-full transition-colors duration-200 hover:bg-ink/5 disabled:opacity-30 disabled:hover:bg-transparent';
 
 function Icon({ children }: { children: ReactNode }) {
   return (
@@ -115,10 +116,7 @@ export default function Experience() {
     phase === 'stir' ? 'Drag in circles to stir' : 'Hold still for a circle, wiggle for leaves, a quick thin pull for the point';
 
   return (
-    <main className="relative h-dvh w-full select-none overflow-hidden bg-roast-glow font-display text-cream">
-      {/* Lamp from the top right: a hot core and a wide warm spill. Brighter in the hero. */}
-      <div aria-hidden className={`lamp-spill pointer-events-none absolute inset-0 transition-opacity duration-1000 ${phase === 'hero' ? 'opacity-100' : 'opacity-60'}`} />
-      <div aria-hidden className={`lamp-core pointer-events-none absolute inset-0 transition-opacity duration-1000 ${phase === 'hero' ? 'opacity-100' : 'opacity-50'}`} />
+    <main className="relative h-dvh w-full select-none overflow-hidden bg-paper-strokes font-display text-ink">
 
       {/* Big type sits behind the canvas, so the cup floats in front of it */}
       <h1
@@ -131,6 +129,20 @@ export default function Experience() {
       </h1>
 
       <canvas ref={canvasRef} className="absolute inset-0 h-full w-full touch-none" />
+
+      {/* Fallen beans along the bottom, hero only (they would sit over the cup in the top view) */}
+      <Beans className={`transition-opacity duration-700 ${phase === 'hero' || phase === 'gliding' ? 'opacity-100' : 'opacity-0'}`} />
+
+      {/* Steam: three inked curls rising from the cup, hero only */}
+      <svg
+        aria-hidden
+        viewBox="0 0 120 160"
+        className={`steam pointer-events-none absolute left-1/2 top-[22%] h-40 w-[120px] -translate-x-1/2 transition-opacity duration-700 ${phase === 'hero' ? 'opacity-100' : 'opacity-0'}`}
+      >
+        <path d="M40 150c-14-22 16-34 2-58-12-20 8-30 6-46" />
+        <path d="M62 156c-16-26 18-40 0-66-12-18 10-30 4-50" />
+        <path d="M84 150c-12-20 14-32 2-56-10-18 6-28 2-42" />
+      </svg>
 
       {/* Top bar */}
       <header className={`pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-5 md:p-8 ${label}`}>
@@ -156,7 +168,7 @@ export default function Experience() {
         <button
           type="button"
           onClick={start}
-          className="rounded-full bg-cream px-8 py-3 text-lg font-medium text-espresso transition-colors duration-200 hover:bg-caramel hover:text-cream focus-visible:ring-2 focus-visible:ring-caramel focus-visible:outline-none"
+          className="rounded-full bg-ink px-8 py-3 text-lg font-medium text-paper transition-colors duration-200 hover:bg-sage hover:text-ink focus-visible:ring-2 focus-visible:ring-sage focus-visible:outline-none"
         >
           Start
         </button>
@@ -190,7 +202,7 @@ export default function Experience() {
                 aria-checked={brush === b.id}
                 aria-label={`Pour ${b.id.toUpperCase()}`}
                 onClick={() => pickBrush(b.id)}
-                className={`grid h-9 w-9 place-items-center rounded-full transition-colors duration-200 ${brush === b.id ? 'bg-cream text-espresso' : 'hover:bg-cream/5'}`}
+                className={`grid h-9 w-9 place-items-center rounded-full transition-colors duration-200 ${brush === b.id ? 'bg-ink text-paper' : 'hover:bg-ink/5'}`}
               >
                 <span className="rounded-full bg-current" style={{ width: b.dot, height: b.dot }} />
               </button>
@@ -205,7 +217,7 @@ export default function Experience() {
               step={0.01}
               value={flow}
               onChange={(e) => changeFlow(Number(e.target.value))}
-              className="h-9 w-28 cursor-pointer accent-caramel md:w-36"
+              className="h-9 w-28 cursor-pointer accent-sage md:w-36"
               aria-label="Pour flow"
             />
           </label>
@@ -214,7 +226,7 @@ export default function Experience() {
           <button
             type="button"
             onClick={stir}
-            className="rounded-full bg-caramel px-4 py-2 text-sm font-medium text-cream transition-transform duration-200 hover:scale-[1.03] disabled:opacity-50 md:px-5"
+            className="rounded-full bg-sage px-4 py-2 text-sm font-medium text-ink transition-transform duration-200 hover:scale-[1.03] disabled:opacity-50 md:px-5"
           >
             Stir it
           </button>
@@ -232,7 +244,7 @@ export default function Experience() {
           <button
             type="button"
             onClick={printReceipt}
-            className="rounded-full bg-caramel px-4 py-2 text-sm font-medium text-cream transition-transform duration-200 hover:scale-[1.03] md:px-5"
+            className="rounded-full bg-sage px-4 py-2 text-sm font-medium text-ink transition-transform duration-200 hover:scale-[1.03] md:px-5"
           >
             Print receipt
           </button>
