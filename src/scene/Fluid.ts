@@ -142,6 +142,23 @@ const gradientFrag = /* glsl */ `
   }
 `;
 
+// 4x4 box filter for shrinking the surface down to a receipt-sized frame
+const downsampleFrag = /* glsl */ `
+  precision highp float;
+  varying vec2 vUv;
+  uniform sampler2D uSource;
+  uniform float uSpacing;
+  void main() {
+    vec3 c = vec3(0.0);
+    for (int i = 0; i < 4; i++) {
+      for (int j = 0; j < 4; j++) {
+        c += texture2D(uSource, vUv + (vec2(float(i), float(j)) - 1.5) * uSpacing).rgb;
+      }
+    }
+    gl_FragColor = vec4(c / 16.0, 1.0);
+  }
+`;
+
 const clearFrag = /* glsl */ `
   precision highp float;
   varying vec2 vUv;
@@ -195,7 +212,7 @@ export class Fluid {
   private history: THREE.WebGLRenderTarget[] = [];
   private historyIndex = -1;
   private static readonly MAX_HISTORY = 30;
-  private mats: Record<'advect' | 'splat' | 'divergence' | 'pressure' | 'gradient' | 'clear' | 'crema', THREE.ShaderMaterial>;
+  private mats: Record<'advect' | 'splat' | 'divergence' | 'pressure' | 'gradient' | 'clear' | 'crema' | 'downsample', THREE.ShaderMaterial>;
 
   constructor(renderer: THREE.WebGLRenderer, simSize = 128, dyeSize = 512) {
     this.renderer = renderer;
@@ -227,6 +244,7 @@ export class Fluid {
         uFeather: { value: 3 / dyeSize },
       }),
       crema: material(cremaFrag, { uSeed: { value: 0 } }),
+      downsample: material(downsampleFrag, { uSource: { value: null }, uSpacing: { value: 0.01 } }),
       divergence: material(divergenceFrag, { uVelocity: { value: null }, uTexel: { value: texel } }),
       pressure: material(pressureFrag, { uPressure: { value: null }, uDivergence: { value: null }, uTexel: { value: texel } }),
       gradient: material(gradientFrag, { uPressure: { value: null }, uVelocity: { value: null }, uTexel: { value: texel } }),
@@ -236,6 +254,23 @@ export class Fluid {
     this.quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.mats.clear);
     this.scene.add(this.quad);
     this.reset();
+  }
+
+  private frameTarget: THREE.WebGLRenderTarget | null = null;
+
+  /** Copy the surface, shrunk to size x size, into `out` (RGBA bytes, rows bottom-up). */
+  readFrame(size: number, out: Uint8Array) {
+    if (!this.frameTarget || this.frameTarget.width !== size) {
+      this.frameTarget?.dispose();
+      this.frameTarget = createTarget(size, THREE.UnsignedByteType);
+    }
+    const prevTarget = this.renderer.getRenderTarget();
+    const m = this.mats.downsample;
+    m.uniforms.uSource.value = this.dye.read.texture;
+    m.uniforms.uSpacing.value = 1 / (4 * size);
+    this.pass(m, this.frameTarget);
+    this.renderer.readRenderTargetPixels(this.frameTarget, 0, 0, size, size, out);
+    this.renderer.setRenderTarget(prevTarget);
   }
 
   /** The milk texture to show on the coffee surface. */
@@ -413,6 +448,7 @@ export class Fluid {
       d.write.dispose();
     }
     this.divergence.dispose();
+    this.frameTarget?.dispose();
     this.clearHistory();
     Object.values(this.mats).forEach((m) => m.dispose());
     this.quad.geometry.dispose();

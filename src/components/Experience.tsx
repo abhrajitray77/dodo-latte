@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { CoffeeScene, type BrushSize } from '../scene/CoffeeScene';
+import Receipt from './Receipt';
+import type { ReceiptData } from '../receipt/draw';
 
-type Phase = 'hero' | 'gliding' | 'art' | 'stir';
+type Phase = 'hero' | 'gliding' | 'art' | 'stir' | 'receipt';
 const label = 'font-mono text-[11px] tracking-wide uppercase';
 
 const BRUSHES: Array<{ id: BrushSize; dot: number }> = [
@@ -30,6 +32,7 @@ export default function Experience() {
   const [history, setHistory] = useState({ undo: false, redo: false });
   const [brush, setBrush] = useState<BrushSize>('xl');
   const [flow, setFlow] = useState(0.5);
+  const [receipt, setReceipt] = useState<ReceiptData | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -89,10 +92,20 @@ export default function Experience() {
     setPhase('stir');
   };
 
+  const printReceipt = () => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+    scene.setInteraction('none');
+    setActive(false);
+    setReceipt({ ...scene.getReceiptData(), orderNo: 1 + Math.floor(Math.random() * 9000), date: new Date() });
+    setPhase('receipt');
+  };
+
   const back = async () => {
     const scene = sceneRef.current;
     if (!scene) return;
     scene.setInteraction('none');
+    setReceipt(null);
     setPhase('gliding');
     await scene.setMode('hero');
     setPhase('hero');
@@ -123,7 +136,7 @@ export default function Experience() {
       <header className={`pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-5 md:p-8 ${label}`}>
         <span>Stir / a tiny latte toy</span>
         <span className="text-right opacity-60">
-          {phase === 'art' ? 'step 01 / latte art' : phase === 'stir' ? 'step 02 / stir' : 'made with milk + webgl'}
+          {phase === 'art' ? 'step 01 / latte art' : phase === 'stir' ? 'step 02 / stir' : phase === 'receipt' ? 'step 03 / receipt' : 'made with milk + webgl'}
         </span>
       </header>
 
@@ -208,13 +221,22 @@ export default function Experience() {
         </div>
       </div>
 
-      {/* Stir hint */}
+      {/* Stir hint + print */}
       <div
-        className={`pointer-events-none absolute inset-x-0 bottom-0 flex justify-center p-8 pb-[max(2rem,env(safe-area-inset-bottom))] transition-opacity duration-500 ${
-          phase === 'stir' && !active ? 'opacity-100' : 'opacity-0'
+        className={`pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center gap-3 p-8 pb-[max(2rem,env(safe-area-inset-bottom))] transition-all duration-500 ${
+          phase === 'stir' ? 'translate-y-0 opacity-100' : 'translate-y-6 opacity-0'
         }`}
       >
-        <p className={`rounded-full border border-cream/15 bg-espresso/80 px-4 py-2 backdrop-blur ${label}`}>{hint}</p>
+        <p className={`${label} transition-opacity duration-500 ${active ? 'opacity-0' : 'opacity-60'}`}>{hint}</p>
+        <div className={`${pill} ${phase === 'stir' ? 'pointer-events-auto' : ''}`}>
+          <button
+            type="button"
+            onClick={printReceipt}
+            className="rounded-full bg-caramel px-4 py-2 text-sm font-medium text-cream transition-transform duration-200 hover:scale-[1.03] md:px-5"
+          >
+            Print receipt
+          </button>
+        </div>
       </div>
       {phase === 'stir' && (
         <div className={`absolute right-5 bottom-5 md:right-8 md:bottom-8 ${pill}`}>
@@ -226,6 +248,9 @@ export default function Experience() {
           </button>
         </div>
       )}
+
+      {/* Receipt: the scene dims and a sheet of paper prints from a slot at the top (drawn by the scene) */}
+      {phase === 'receipt' && receipt && sceneRef.current && <Receipt data={receipt} scene={sceneRef.current} onAgain={back} />}
     </main>
   );
 }

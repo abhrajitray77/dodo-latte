@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import gsap from 'gsap';
 import { Fluid } from './Fluid';
+import { Recorder } from './Recorder';
+import { PaperSim, type PaperEvents, type PaperOptions } from './PaperSim';
 
 export type Mode = 'hero' | 'top';
 export type Interaction = 'none' | 'paint' | 'stir';
@@ -186,6 +188,11 @@ export class CoffeeScene {
   private interaction: Interaction = 'none';
   private brush: BrushSize = 'xl';
   private flow = 0.5;
+  // time-lapse and numbers for the receipt
+  private recorder = new Recorder(96);
+  private frameBuf = new Uint8Array(96 * 96 * 4);
+  private stats = { strokes: 0, pourSeconds: 0, stirSeconds: 0 };
+  private paper: PaperSim | null = null;
   private strokeChanged = false;
   private pendingCheckpoint = 0;
   private onPointer?: (active: boolean) => void;
@@ -277,12 +284,14 @@ export class CoffeeScene {
 
   undo() {
     this.flushCheckpoint();
+    this.recorder.touch(this.clock.elapsedTime);
     this.fluid.undo();
     this.emitHistory();
   }
 
   redo() {
     this.flushCheckpoint();
+    this.recorder.touch(this.clock.elapsedTime);
     this.fluid.redo();
     this.emitHistory();
   }
@@ -290,6 +299,7 @@ export class CoffeeScene {
   /** Wipe the latte art back to plain coffee (undoable). */
   clearArt() {
     this.flushCheckpoint();
+    this.recorder.touch(this.clock.elapsedTime);
     this.fluid.reset();
     this.checkpoint();
   }
@@ -307,6 +317,9 @@ export class CoffeeScene {
   setInteraction(interaction: Interaction) {
     this.interaction = interaction;
     this.lastUv = null;
+    if (interaction === 'stir') this.recorder.markStir();
+    // the time-lapse opens on the clean cup
+    if (interaction === 'paint' && this.recorder.frames.length === 0) this.captureFrame(this.clock.elapsedTime);
     // stirring is loose and swirly; milk art is a touch thicker so strokes hold their shape
     this.fluid.drag = interaction === 'stir' ? 0.985 : 0.972;
   }
@@ -344,8 +357,40 @@ export class CoffeeScene {
     this.fluid.addForce(bx, by, dx * k, dy * k, Math.max(0.0012, size * 1.1));
   }
 
+  /** Print a receipt: the sheet is simulated and drawn over the scene until hidePaper(). */
+  showPaper(canvas: HTMLCanvasElement, opts: PaperOptions, events: PaperEvents) {
+    this.paper?.dispose();
+    this.paper = new PaperSim(canvas, opts, { width: this.canvas.clientWidth, height: this.canvas.clientHeight }, events);
+    return this.paper;
+  }
+
+  hidePaper() {
+    this.paper?.dispose();
+    this.paper = null;
+  }
+
+  /** Everything the receipt needs. Captures a frame first if nothing was recorded yet. */
+  getReceiptData() {
+    if (this.recorder.frames.length === 0) this.captureFrame(this.clock.elapsedTime);
+    return {
+      frames: this.recorder.frames,
+      frameSize: this.recorder.size,
+      stirFrom: this.recorder.stirFrom,
+      ...this.stats,
+      size: this.brush,
+      flow: this.flow,
+    };
+  }
+
+  private captureFrame(time: number) {
+    this.fluid.readFrame(this.recorder.size, this.frameBuf);
+    this.recorder.push(this.frameBuf.slice(), time);
+  }
+
   /** A brand new cup: new crema, empty history. */
   resetCoffee() {
+    this.recorder.reset();
+    this.stats = { strokes: 0, pourSeconds: 0, stirSeconds: 0 };
     this.fluid.reset(true);
     this.fluid.clearHistory();
     this.checkpoint();
@@ -370,6 +415,7 @@ export class CoffeeScene {
     // keep the cup comfortably framed on tall phones
     this.camera.zoom = w / h < 0.75 ? 0.68 : 1;
     this.camera.updateProjectionMatrix();
+    this.paper?.resize(w, h);
   };
 
   private toNdc(e: PointerEvent) {
@@ -390,6 +436,7 @@ export class CoffeeScene {
     this.toNdc(e);
     this.lastUv = this.mode === 'top' ? this.coffeeUv() : null;
     if (this.interaction === 'paint' && this.lastUv) {
+      this.stats.strokes++;
       this.strokeChanged = true;
       this.onPointer?.(true);
     }
@@ -472,19 +519,32 @@ export class CoffeeScene {
 
     // paint: while pressed, foam lands at the pointer and pushes the whole surface outward from there
     if (this.interaction === 'paint' && this.dragging && this.lastUv) {
+      this.stats.pourSeconds += dt;
+      this.recorder.touch(time);
       const size = BRUSH[this.brush];
       this.fluid.pour(this.lastUv.x, this.lastUv.y, this.flow * size * 90, Math.sqrt(size));
       this.fluid.addMilk(this.lastUv.x, this.lastUv.y, 0.85, size);
     }
 
+    if (this.interaction === 'stir' && this.dragging) {
+      this.stats.stirSeconds += dt;
+      this.recorder.touch(time);
+    }
+
     this.fluid.step(dt);
+    if (this.interaction !== 'none' && this.recorder.wantsFrame(time)) this.captureFrame(time);
     this.coffee.material.uniforms.uDye.value = this.fluid.texture;
     this.renderer.setRenderTarget(null);
     this.renderer.render(this.scene, this.camera);
+    if (this.paper) {
+      this.paper.update(dt);
+      this.paper.render(this.renderer);
+    }
   };
 
   dispose() {
     cancelAnimationFrame(this.raf);
+    this.hidePaper();
     this.canvas.removeEventListener('pointermove', this.handlePointerMove);
     this.canvas.removeEventListener('pointerdown', this.handlePointerDown);
     window.removeEventListener('pointerup', this.handlePointerUp);
