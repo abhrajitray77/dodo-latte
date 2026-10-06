@@ -4,59 +4,10 @@ import { Fluid } from './Fluid';
 
 export type Mode = 'hero' | 'top';
 export type Interaction = 'none' | 'paint' | 'stir';
-export type Preset = 'heart' | 'tulip' | 'rosetta';
 export type BrushSize = 's' | 'm' | 'l' | 'xl';
 
-/**
-  Pour streams per brush size. r = where the stream lands (uv), flow = milk inflow per second.
-  Holding still grows a blob; moving drags it; a thin fast move is a pull-through.
-*/
-const STREAM: Record<BrushSize, { r: number; flow: number }> = {
-  s: { r: 0.01, flow: 30 },
-  m: { r: 0.016, flow: 40 },
-  l: { r: 0.022, flow: 55 },
-  xl: { r: 0.03, flow: 70 },
-};
-
-/** Inflow scale for presets (paint mode uses the Flow slider instead). */
-const PRESET_FLOW = 0.6;
-
-/** One movement of the pitcher: where the stream is over time t in [0,1], for `dur` seconds. */
-type PourMove = { path: (t: number) => [number, number]; dur: number; size: BrushSize; push: number };
-
-const hold = (x: number, y: number, dur: number, size: BrushSize, driftY = 0): PourMove => ({
-  path: (t) => [x, y + driftY * t],
-  dur,
-  size,
-  push: 0.4,
-});
-const pull = (x: number, y0: number, y1: number, dur: number): PourMove => ({
-  path: (t) => [x, y0 + (y1 - y0) * t],
-  dur,
-  size: 's',
-  push: 1.3,
-});
-
-/*
-  Presets poured the way a barista does it (uv: y up = far side of the cup):
-  - heart: one steady pour that grows a round blob, then a thin pull-through that pinches it.
-  - tulip: three pours, each new one pushing the previous one forward into a cup, then a pull-through.
-  - rosetta: wiggle side to side while moving back, a small blob at the end, then pull through.
-*/
-const PRESETS: Record<Preset, PourMove[]> = {
-  heart: [hold(0.5, 0.55, 1.6, 'l', -0.05), pull(0.5, 0.78, 0.26, 0.4)],
-  tulip: [hold(0.5, 0.6, 0.75, 'l'), hold(0.5, 0.48, 0.6, 'l'), hold(0.5, 0.38, 0.5, 'l'), pull(0.5, 0.74, 0.26, 0.4)],
-  rosetta: [
-    {
-      path: (t) => [0.5 + Math.sin(t * Math.PI * 2 * 9) * (0.05 + 0.07 * t), 0.68 - 0.38 * t],
-      dur: 2.6,
-      size: 'm',
-      push: 0.5,
-    },
-    hold(0.5, 0.76, 0.35, 'm'),
-    pull(0.5, 0.8, 0.24, 0.45),
-  ],
-};
+// milk drop size (uv^2) per brush
+const BRUSH: Record<BrushSize, number> = { s: 0.00018, m: 0.0005, l: 0.0012, xl: 0.0028 };
 
 /*
   Look: flat retro-poster illustration. Two-tone shading with a hard terminator, no outlines,
@@ -233,12 +184,8 @@ export class CoffeeScene {
   private raycaster = new THREE.Raycaster();
   private dragging = false;
   private interaction: Interaction = 'none';
-  private pouring = false;
   private brush: BrushSize = 'xl';
-  /** Paint-mode flow, 0..1 (the slider). Presets use their own fixed flow. */
-  private flow = 0.35;
-  /** True once the user has painted on the current cup (presets and clears reset it). */
-  private userDrew = false;
+  private flow = 0.5;
   private strokeChanged = false;
   private pendingCheckpoint = 0;
   private onPointer?: (active: boolean) => void;
@@ -329,14 +276,12 @@ export class CoffeeScene {
   }
 
   undo() {
-    if (this.pouring) return;
     this.flushCheckpoint();
     this.fluid.undo();
     this.emitHistory();
   }
 
   redo() {
-    if (this.pouring) return;
     this.flushCheckpoint();
     this.fluid.redo();
     this.emitHistory();
@@ -344,14 +289,12 @@ export class CoffeeScene {
 
   /** Wipe the latte art back to plain coffee (undoable). */
   clearArt() {
-    if (this.pouring) return;
     this.flushCheckpoint();
     this.fluid.reset();
-    this.userDrew = false;
     this.checkpoint();
   }
 
-  /** How hard the milk pours in paint mode, 0..1. */
+  /** How heavy the pour is, 0..1 (the Flow slider): how fast the foam spreads from the stream. */
   setFlow(flow: number) {
     this.flow = THREE.MathUtils.clamp(flow, 0, 1);
   }
@@ -366,12 +309,6 @@ export class CoffeeScene {
     this.lastUv = null;
     // stirring is loose and swirly; milk art is a touch thicker so strokes hold their shape
     this.fluid.drag = interaction === 'stir' ? 0.985 : 0.972;
-  }
-
-  /** Switch to paint. A preset is wiped first, but your own drawing is kept. */
-  enterPaint() {
-    if (!this.userDrew && !this.pouring) this.clearArt();
-    this.setInteraction('paint');
   }
 
   setMode(mode: Mode) {
@@ -392,64 +329,23 @@ export class CoffeeScene {
     });
   }
 
-  /** Start from fresh coffee and pour a preset with the same stream physics as paint mode. */
-  async pour(preset: Preset) {
-    if (this.pouring) return;
-    this.flushCheckpoint();
-    this.pouring = true;
-    this.userDrew = false;
-    this.fluid.reset();
-    this.fluid.drag = 0.972;
-    for (const move of PRESETS[preset]) await this.runPour(move);
-    // let the milk spread a moment, then ease to a stop so nothing drifts afterwards
-    await new Promise((resolve) => window.setTimeout(resolve, 350));
-    this.fluid.drag = 0.9;
-    await new Promise((resolve) => window.setTimeout(resolve, 400));
-    this.fluid.stopMotion();
-    this.fluid.drag = this.interaction === 'stir' ? 0.985 : 0.972;
-    this.pouring = false;
-    this.checkpoint();
-  }
-
-  /** Milk landing at uv this frame: inflow that spreads the surface, plus the milk color. */
-  private streamAt(x: number, y: number, size: BrushSize, strength: number) {
-    const { r, flow } = STREAM[size];
-    this.fluid.addInflow(x, y, flow * strength, r * r);
-    this.fluid.addMilk(x, y, 0.9, r * r);
-  }
-
-  /** The stream moved from a to b: lay milk along the way and drag the surface with it. */
-  private streamMove(ax: number, ay: number, bx: number, by: number, size: BrushSize, push: number) {
-    const { r } = STREAM[size];
+  /** One milk stroke from a to b at the brush size, carrying the liquid along with the drag. */
+  private paintSegment(ax: number, ay: number, bx: number, by: number, size: number) {
     const dx = bx - ax;
     const dy = by - ay;
-    const n = Math.max(1, Math.ceil(Math.hypot(dx, dy) / (r * 0.5)));
-    for (let i = 1; i <= n; i++) this.fluid.addMilk(ax + (dx * i) / n, ay + (dy * i) / n, 0.9, r * r);
-    const k = this.fluid.simSize * 12 * push;
-    this.fluid.addForce(bx, by, dx * k, dy * k, Math.max(0.0012, (r * 1.6) ** 2));
-  }
-
-  /** Play one scripted pitcher movement, one stream update per frame. */
-  private runPour(move: PourMove) {
-    return new Promise<void>((resolve) => {
-      let prev = move.path(0);
-      const t0 = performance.now();
-      const tick = () => {
-        const t = Math.min(1, (performance.now() - t0) / (move.dur * 1000));
-        const cur = move.path(t);
-        this.streamMove(prev[0], prev[1], cur[0], cur[1], move.size, move.push);
-        this.streamAt(cur[0], cur[1], move.size, PRESET_FLOW);
-        prev = cur;
-        if (t < 1) requestAnimationFrame(tick);
-        else resolve();
-      };
-      tick();
-    });
+    const dist = Math.hypot(dx, dy);
+    const n = Math.max(1, Math.ceil(dist / (Math.sqrt(size) * 0.3)));
+    const radius = size * THREE.MathUtils.clamp(1 - dist * 6, 0.6, 1);
+    for (let i = 1; i <= n; i++) {
+      const t = i / n;
+      this.fluid.addMilk(ax + dx * t, ay + dy * t, 0.85, radius);
+    }
+    const k = this.fluid.simSize * 14;
+    this.fluid.addForce(bx, by, dx * k, dy * k, Math.max(0.0012, size * 1.1));
   }
 
   /** A brand new cup: new crema, empty history. */
   resetCoffee() {
-    this.userDrew = false;
     this.fluid.reset(true);
     this.fluid.clearHistory();
     this.checkpoint();
@@ -493,8 +389,7 @@ export class CoffeeScene {
     this.canvas.setPointerCapture(e.pointerId);
     this.toNdc(e);
     this.lastUv = this.mode === 'top' ? this.coffeeUv() : null;
-    if (this.interaction === 'paint' && this.lastUv && !this.pouring) {
-      this.userDrew = true;
+    if (this.interaction === 'paint' && this.lastUv) {
       this.strokeChanged = true;
       this.onPointer?.(true);
     }
@@ -515,7 +410,7 @@ export class CoffeeScene {
       this.tiltTarget.set(-this.pointerNdc.y * 0.1, -this.pointerNdc.x * 0.14);
       return;
     }
-    if (!this.dragging || this.interaction === 'none' || this.pouring) return;
+    if (!this.dragging || this.interaction === 'none') return;
     const uv = this.coffeeUv();
     if (uv && this.lastUv) {
       const dx = uv.x - this.lastUv.x;
@@ -524,9 +419,8 @@ export class CoffeeScene {
         const k = this.fluid.simSize * 55;
         this.fluid.addForce(uv.x, uv.y, dx * k, dy * k, 0.0025);
       } else {
-        // paint: the stream follows the pointer (it keeps pouring every frame in the loop)
-        this.streamMove(this.lastUv.x, this.lastUv.y, uv.x, uv.y, this.brush, 0.6);
-        this.userDrew = true;
+        // paint: the milk follows the pointer (and keeps pouring every frame in the loop)
+        this.paintSegment(this.lastUv.x, this.lastUv.y, uv.x, uv.y, BRUSH[this.brush]);
       }
       this.strokeChanged = true;
       this.onPointer?.(true);
@@ -576,10 +470,11 @@ export class CoffeeScene {
 
     if (this.pendingCheckpoint > 0 && time >= this.pendingCheckpoint) this.flushCheckpoint();
 
-    // paint: while pressed on the coffee, milk keeps pouring at the pointer
-    if (this.interaction === 'paint' && this.dragging && this.lastUv && !this.pouring) {
-      // slider 0..1 maps to a gentle trickle .. a heavy pour
-      this.streamAt(this.lastUv.x, this.lastUv.y, this.brush, 0.08 + this.flow * 0.9);
+    // paint: while pressed, foam lands at the pointer and pushes the whole surface outward from there
+    if (this.interaction === 'paint' && this.dragging && this.lastUv) {
+      const size = BRUSH[this.brush];
+      this.fluid.pour(this.lastUv.x, this.lastUv.y, this.flow * size * 90, Math.sqrt(size));
+      this.fluid.addMilk(this.lastUv.x, this.lastUv.y, 0.85, size);
     }
 
     this.fluid.step(dt);

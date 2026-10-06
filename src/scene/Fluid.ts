@@ -15,6 +15,13 @@ const baseVertex = /* glsl */ `
   }
 `;
 
+/*
+  Advection, plus the pour. Foam landing on the surface piles up where the stream hits and shoves
+  everything already there outward: a 2D source. Its outflow is Q / (2 pi r) (Q = area added per
+  second), softened inside the stream's own radius, and it dies off toward the cup wall because the
+  surface as a whole just rises. There is no inertia in this part: the spreading stops when the
+  pour stops, like real foam.
+*/
 const advectFrag = /* glsl */ `
   precision highp float;
   varying vec2 vUv;
@@ -23,9 +30,19 @@ const advectFrag = /* glsl */ `
   uniform vec2 uTexel;       // velocity texel size
   uniform float uDt;
   uniform float uDissipation;
+  uniform vec2 uPour;        // where the stream lands (uv)
+  uniform float uPourQ;      // area of foam added per second (uv^2 / s), 0 = not pouring
+  uniform float uPourCore;   // stream radius (uv)
   void main() {
-    vec2 coord = vUv - uDt * texture2D(uVelocity, vUv).xy * uTexel;
-    gl_FragColor = uDissipation * texture2D(uSource, coord);
+    vec2 v = texture2D(uVelocity, vUv).xy * uTexel;
+    if (uPourQ > 0.0) {
+      vec2 d = vUv - uPour;
+      vec2 spread = (uPourQ / 6.2832) * d / (dot(d, d) + uPourCore * uPourCore);
+      vec2 c = (vUv - 0.5) * 2.0;
+      spread *= max(0.0, 1.0 - dot(c, c)); // nothing moves at the wall
+      v += spread;
+    }
+    gl_FragColor = uDissipation * texture2D(uSource, vUv - uDt * v);
   }
 `;
 
@@ -76,21 +93,17 @@ const cremaFrag = /* glsl */ `
   }
 `;
 
-// Divergence minus the milk being poured in: the pressure solve then pushes the liquid
-// outward from each pour point, like milk landing in the cup and spreading.
 const divergenceFrag = /* glsl */ `
   precision highp float;
   varying vec2 vUv;
   uniform sampler2D uVelocity;
-  uniform sampler2D uPour;
   uniform vec2 uTexel;
   void main() {
     float L = texture2D(uVelocity, vUv - vec2(uTexel.x, 0.0)).x;
     float R = texture2D(uVelocity, vUv + vec2(uTexel.x, 0.0)).x;
     float B = texture2D(uVelocity, vUv - vec2(0.0, uTexel.y)).y;
     float T = texture2D(uVelocity, vUv + vec2(0.0, uTexel.y)).y;
-    float pour = texture2D(uPour, vUv).x;
-    gl_FragColor = vec4(0.5 * (R - L + T - B) - pour, 0.0, 0.0, 1.0);
+    gl_FragColor = vec4(0.5 * (R - L + T - B), 0.0, 0.0, 1.0);
   }
 `;
 
@@ -182,8 +195,6 @@ export class Fluid {
   private history: THREE.WebGLRenderTarget[] = [];
   private historyIndex = -1;
   private static readonly MAX_HISTORY = 30;
-  /** Where milk is being poured this frame (R = inflow rate). Cleared after every step. */
-  private pourField: Double;
   private mats: Record<'advect' | 'splat' | 'divergence' | 'pressure' | 'gradient' | 'clear' | 'crema', THREE.ShaderMaterial>;
 
   constructor(renderer: THREE.WebGLRenderer, simSize = 128, dyeSize = 512) {
@@ -193,7 +204,6 @@ export class Fluid {
     this.velocity = createDouble(simSize);
     this.pressure = createDouble(simSize);
     this.divergence = createTarget(simSize);
-    this.pourField = createDouble(simSize);
     this.dye = createDouble(dyeSize);
 
     const texel = new THREE.Vector2(1 / simSize, 1 / simSize);
@@ -204,6 +214,9 @@ export class Fluid {
         uTexel: { value: texel },
         uDt: { value: 0 },
         uDissipation: { value: 1 },
+        uPour: { value: new THREE.Vector2(0.5, 0.5) },
+        uPourQ: { value: 0 },
+        uPourCore: { value: 0.03 },
       }),
       splat: material(splatFrag, {
         uTarget: { value: null },
@@ -214,7 +227,7 @@ export class Fluid {
         uFeather: { value: 3 / dyeSize },
       }),
       crema: material(cremaFrag, { uSeed: { value: 0 } }),
-      divergence: material(divergenceFrag, { uVelocity: { value: null }, uPour: { value: null }, uTexel: { value: texel } }),
+      divergence: material(divergenceFrag, { uVelocity: { value: null }, uTexel: { value: texel } }),
       pressure: material(pressureFrag, { uPressure: { value: null }, uDivergence: { value: null }, uTexel: { value: texel } }),
       gradient: material(gradientFrag, { uPressure: { value: null }, uVelocity: { value: null }, uTexel: { value: texel } }),
       clear: material(clearFrag, { uTarget: { value: null }, uValue: { value: 0.8 } }),
@@ -249,18 +262,14 @@ export class Fluid {
   }
 
   /**
-   * Milk flowing in at uv this frame: the surface spreads outward from here.
-   * `rate` is inflow per second, `radius` is the stream's footprint (uv^2, gaussian).
+   * The stream is landing at uv this frame: everything on the surface spreads outward from there.
+   * q = foam area added per second (uv^2 / s), core = the stream's radius (uv).
    */
-  addInflow(x: number, y: number, rate: number, radius: number) {
-    const m = this.mats.splat;
-    m.uniforms.uTarget.value = this.pourField.read.texture;
-    m.uniforms.uPoint.value.set(x, y);
-    m.uniforms.uColor.value.set(rate, 0, 0);
-    m.uniforms.uRadius.value = radius;
-    m.uniforms.uMix.value = 0;
-    this.pass(m, this.pourField.write);
-    this.pourField.swap();
+  pour(x: number, y: number, q: number, core: number) {
+    const u = this.mats.advect.uniforms;
+    u.uPour.value.set(x, y);
+    u.uPourQ.value = q;
+    u.uPourCore.value = core;
   }
 
   /** Pour milk at uv: blends the surface toward milk white. */
@@ -280,7 +289,7 @@ export class Fluid {
     const prevTarget = this.renderer.getRenderTarget();
     const m = this.mats.clear;
     m.uniforms.uValue.value = 0;
-    for (const d of [this.velocity, this.pressure, this.pourField]) {
+    for (const d of [this.velocity, this.pressure]) {
       m.uniforms.uTarget.value = d.read.texture;
       this.pass(m, d.write);
       d.swap();
@@ -310,9 +319,9 @@ export class Fluid {
   private restore(index: number) {
     const prevTarget = this.renderer.getRenderTarget();
     this.historyIndex = index;
-    this.stopMotion();
     this.copyInto(this.history[index].texture, this.dye.write);
     this.dye.swap();
+    this.stopMotion(); // also strips freshness so the restored art holds still
     this.renderer.setRenderTarget(prevTarget);
   }
 
@@ -344,7 +353,7 @@ export class Fluid {
     const prevTarget = this.renderer.getRenderTarget();
     const m = this.mats.clear;
     m.uniforms.uValue.value = 0;
-    for (const d of [this.velocity, this.pressure, this.pourField]) {
+    for (const d of [this.velocity, this.pressure]) {
       m.uniforms.uTarget.value = d.read.texture;
       this.pass(m, d.write);
       d.swap();
@@ -361,13 +370,7 @@ export class Fluid {
     const prevTarget = this.renderer.getRenderTarget();
 
     divergence.uniforms.uVelocity.value = this.velocity.read.texture;
-    divergence.uniforms.uPour.value = this.pourField.read.texture;
     this.pass(divergence, this.divergence);
-    // inflow only lasts one step; the caller adds it again every frame the stream is on
-    clear.uniforms.uTarget.value = this.pourField.read.texture;
-    clear.uniforms.uValue.value = 0;
-    this.pass(clear, this.pourField.write);
-    this.pourField.swap();
 
     clear.uniforms.uTarget.value = this.pressure.read.texture;
     clear.uniforms.uValue.value = 0.8;
@@ -399,11 +402,13 @@ export class Fluid {
     this.pass(advect, this.dye.write);
     this.dye.swap();
 
+    advect.uniforms.uPourQ.value = 0; // the pour is re-declared every frame it is on
+
     this.renderer.setRenderTarget(prevTarget);
   }
 
   dispose() {
-    for (const d of [this.velocity, this.pressure, this.dye, this.pourField]) {
+    for (const d of [this.velocity, this.pressure, this.dye]) {
       d.read.dispose();
       d.write.dispose();
     }
