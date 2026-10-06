@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { CoffeeScene, type Preset } from '../scene/CoffeeScene';
+import { CoffeeScene, type BrushSize, type Preset } from '../scene/CoffeeScene';
 
 type Phase = 'hero' | 'gliding' | 'art' | 'stir';
 type ArtChoice = Preset | 'paint';
@@ -49,6 +49,24 @@ const ART_OPTIONS: Array<{ id: ArtChoice; label: string; icon: ReactNode }> = [
 
 const label = 'font-mono text-[11px] tracking-wide uppercase';
 
+const BRUSHES: Array<{ id: BrushSize; dot: number }> = [
+  { id: 's', dot: 4 },
+  { id: 'm', dot: 7 },
+  { id: 'l', dot: 11 },
+  { id: 'xl', dot: 16 },
+];
+
+const pill = 'flex items-center gap-1.5 rounded-full border border-cream/10 bg-espresso/85 p-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.35)] backdrop-blur';
+const iconButton = 'grid h-9 w-9 place-items-center rounded-full transition-colors duration-200 hover:bg-cream/5 disabled:opacity-30 disabled:hover:bg-transparent';
+
+function Icon({ children }: { children: ReactNode }) {
+  return (
+    <svg viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current stroke-[1.6]" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      {children}
+    </svg>
+  );
+}
+
 export default function Experience() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sceneRef = useRef<CoffeeScene | null>(null);
@@ -56,12 +74,16 @@ export default function Experience() {
   const [art, setArt] = useState<ArtChoice | null>(null);
   const [pouring, setPouring] = useState(false);
   const [active, setActive] = useState(false);
+  const [history, setHistory] = useState({ undo: false, redo: false });
+  const [brush, setBrush] = useState<BrushSize>('xl');
+  const [flow, setFlow] = useState(0.35);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const scene = new CoffeeScene(canvas);
     scene.setPointerListener(setActive);
+    scene.setHistoryListener((undo, redo) => setHistory({ undo, redo }));
     sceneRef.current = scene;
     return () => {
       scene.dispose();
@@ -74,14 +96,41 @@ export default function Experience() {
     if (!scene || pouring) return;
     setArt(id);
     if (id === 'paint') {
-      scene.resetCoffee();
-      scene.setInteraction('paint');
+      // a preset gets wiped for a blank cup; your own drawing stays
+      if (art !== 'paint') scene.enterPaint();
       return;
     }
     scene.setInteraction('none');
     setPouring(true);
     await scene.pour(id);
     setPouring(false);
+  };
+
+  // keyboard: Ctrl/Cmd+Z undo, Ctrl/Cmd+Shift+Z or Ctrl+Y redo
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      const k = e.key.toLowerCase();
+      if (k === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        sceneRef.current?.undo();
+      } else if ((k === 'z' && e.shiftKey) || k === 'y') {
+        e.preventDefault();
+        sceneRef.current?.redo();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  const changeFlow = (value: number) => {
+    setFlow(value);
+    sceneRef.current?.setFlow(value);
+  };
+
+  const pickBrush = (size: BrushSize) => {
+    setBrush(size);
+    sceneRef.current?.setBrushSize(size);
   };
 
   const start = async () => {
@@ -111,10 +160,14 @@ export default function Experience() {
   };
 
   const hint =
-    phase === 'stir' ? 'Drag in circles to stir' : art === 'paint' ? 'Drag on the coffee to pour milk' : pouring ? 'Pouring' : 'Pick your latte art';
+    phase === 'stir' ? 'Drag in circles to stir' : art === 'paint' ? 'Hold to pour, move to shape, flick to pull through' : pouring ? 'Pouring' : 'Pick your latte art';
 
   return (
-    <main className="relative h-dvh w-full select-none overflow-hidden bg-paper font-display text-ink">
+    <main className="relative h-dvh w-full select-none overflow-hidden bg-roast-glow font-display text-cream">
+      {/* Lamp from the top right: a hot core and a wide warm spill. Brighter in the hero. */}
+      <div aria-hidden className={`lamp-spill pointer-events-none absolute inset-0 transition-opacity duration-1000 ${phase === 'hero' ? 'opacity-100' : 'opacity-60'}`} />
+      <div aria-hidden className={`lamp-core pointer-events-none absolute inset-0 transition-opacity duration-1000 ${phase === 'hero' ? 'opacity-100' : 'opacity-50'}`} />
+
       {/* Big type sits behind the canvas, so the cup floats in front of it */}
       <h1
         aria-hidden={phase !== 'hero'}
@@ -151,7 +204,7 @@ export default function Experience() {
         <button
           type="button"
           onClick={start}
-          className="rounded-full bg-ink px-8 py-3 text-lg font-medium text-paper transition-colors duration-200 hover:bg-lime hover:text-ink focus-visible:ring-2 focus-visible:ring-lime focus-visible:outline-none"
+          className="rounded-full bg-cream px-8 py-3 text-lg font-medium text-espresso transition-colors duration-200 hover:bg-caramel hover:text-cream focus-visible:ring-2 focus-visible:ring-caramel focus-visible:outline-none"
         >
           Start
         </button>
@@ -164,7 +217,52 @@ export default function Experience() {
         }`}
       >
         <p className={`${label} opacity-60`}>{hint}</p>
-        <div className="flex items-center gap-1.5 rounded-full border border-ink/10 bg-paper/85 p-1.5 shadow-[0_8px_30px_rgba(0,22,13,0.08)] backdrop-blur">
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <div className={pill}>
+            <button type="button" className={iconButton} onClick={() => sceneRef.current?.undo()} disabled={!history.undo || pouring} aria-label="Undo" title="Undo (Ctrl+Z)">
+              <Icon><path d="M9 14 4 9l5-5" /><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" /></Icon>
+            </button>
+            <button type="button" className={iconButton} onClick={() => sceneRef.current?.redo()} disabled={!history.redo || pouring} aria-label="Redo" title="Redo (Ctrl+Shift+Z)">
+              <Icon><path d="m15 14 5-5-5-5" /><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13" /></Icon>
+            </button>
+            <button type="button" className={iconButton} onClick={() => sceneRef.current?.clearArt()} disabled={pouring} aria-label="Clear latte art" title="Clear">
+              <Icon><path d="M4 7h16" /><path d="M10 11v6M14 11v6" /><path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12" /><path d="M9 7V4h6v3" /></Icon>
+            </button>
+          </div>
+          {art === 'paint' && (
+            <div className={pill} role="radiogroup" aria-label="Pour size">
+              {BRUSHES.map((b) => (
+                <button
+                  key={b.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={brush === b.id}
+                  aria-label={`Pour ${b.id.toUpperCase()}`}
+                  onClick={() => pickBrush(b.id)}
+                  className={`grid h-9 w-9 place-items-center rounded-full transition-colors duration-200 ${brush === b.id ? 'bg-cream text-espresso' : 'hover:bg-cream/5'}`}
+                >
+                  <span className="rounded-full bg-current" style={{ width: b.dot, height: b.dot }} />
+                </button>
+              ))}
+            </div>
+          )}
+          {art === 'paint' && (
+            <label className={`${pill} gap-3 px-4`}>
+              <span className={`${label} opacity-70`}>Flow</span>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.01}
+                value={flow}
+                onChange={(e) => changeFlow(Number(e.target.value))}
+                className="h-9 w-28 cursor-pointer accent-caramel md:w-36"
+                aria-label="Pour flow"
+              />
+            </label>
+          )}
+        </div>
+        <div className={pill}>
           {ART_OPTIONS.map((o) => (
             <button
               key={o.id}
@@ -174,7 +272,7 @@ export default function Experience() {
               aria-pressed={art === o.id}
               aria-label={o.label}
               className={`flex items-center gap-2 rounded-full px-3 py-2 text-sm font-medium transition-colors duration-200 disabled:opacity-50 md:px-4 ${
-                art === o.id ? 'bg-ink text-paper' : 'hover:bg-ink/5'
+                art === o.id ? 'bg-cream text-espresso' : 'hover:bg-cream/5'
               }`}
             >
               <svg viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current stroke-[1.6]" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -183,12 +281,12 @@ export default function Experience() {
               <span className="hidden sm:inline">{o.label}</span>
             </button>
           ))}
-          <span className="mx-1 h-6 w-px bg-ink/10" aria-hidden />
+          <span className="mx-1 h-6 w-px bg-cream/10" aria-hidden />
           <button
             type="button"
             onClick={stir}
             disabled={pouring || !art}
-            className="rounded-full bg-lime px-4 py-2 text-sm font-medium text-ink transition-transform duration-200 hover:scale-[1.03] disabled:opacity-50 md:px-5"
+            className="rounded-full bg-caramel px-4 py-2 text-sm font-medium text-cream transition-transform duration-200 hover:scale-[1.03] disabled:opacity-50 md:px-5"
           >
             Stir it
           </button>
@@ -201,8 +299,18 @@ export default function Experience() {
           phase === 'stir' && !active ? 'opacity-100' : 'opacity-0'
         }`}
       >
-        <p className={`rounded-full border border-ink/15 bg-paper/80 px-4 py-2 backdrop-blur ${label}`}>{hint}</p>
+        <p className={`rounded-full border border-cream/15 bg-espresso/80 px-4 py-2 backdrop-blur ${label}`}>{hint}</p>
       </div>
+      {phase === 'stir' && (
+        <div className={`absolute right-5 bottom-5 md:right-8 md:bottom-8 ${pill}`}>
+          <button type="button" className={iconButton} onClick={() => sceneRef.current?.undo()} disabled={!history.undo} aria-label="Undo" title="Undo (Ctrl+Z)">
+            <Icon><path d="M9 14 4 9l5-5" /><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" /></Icon>
+          </button>
+          <button type="button" className={iconButton} onClick={() => sceneRef.current?.redo()} disabled={!history.redo} aria-label="Redo" title="Redo (Ctrl+Shift+Z)">
+            <Icon><path d="m15 14 5-5-5-5" /><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13" /></Icon>
+          </button>
+        </div>
+      )}
     </main>
   );
 }

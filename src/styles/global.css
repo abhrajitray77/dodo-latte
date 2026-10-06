@@ -22,10 +22,11 @@
   --font-display: "Apfel Grotezk", "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: ui-monospace, "SFMono-Regular", Menlo, monospace;
 
-  /* Dodo palette + coffee */
-  --color-ink: #00160d;
-  --color-lime: #c6fe1e;
-  --color-paper: #f4f1ea;
+  /* dark roast */
+  --color-espresso: #140d09;
+  --color-roast: #2a1a11;
+  --color-cream: #f1e6d6;
+  --color-caramel: #d49a5c;
   --color-crema: #c08a55;
   --color-coffee: #3d2214;
 }
@@ -34,8 +35,28 @@ html,
 body {
   height: 100%;
   overflow: hidden;
-  background: var(--color-paper);
-  color: var(--color-ink);
+  background: var(--color-espresso);
+  color: var(--color-cream);
   overscroll-behavior: none;
   -webkit-tap-highlight-color: transparent;
+}
+
+/* Base page: espresso with a faint warm pool around the cup */
+.bg-roast-glow {
+  background:
+    radial-gradient(ellipse 55% 45% at 55% 55%, rgb(150 92 52 / 0.22) 0%, transparent 70%),
+    var(--color-espresso);
+}
+
+/* Lamp, both from the top right: a wide warm spill reaching across toward the cup... */
+.lamp-spill {
+  background:
+    radial-gradient(ellipse 95% 85% at 100% 0%, rgb(255 178 110 / 0.26) 0%, rgb(220 140 80 / 0.1) 40%, transparent 72%),
+    linear-gradient(215deg, rgb(255 190 130 / 0.1) 0%, transparent 50%);
+}
+
+/* ...and a small, hot core right at the source */
+.lamp-core {
+  background: radial-gradient(circle at 96% 2%, rgb(255 236 205 / 0.55) 0%, rgb(255 200 140 / 0.25) 12%, transparent 32%);
+  mix-blend-mode: screen;
 }
