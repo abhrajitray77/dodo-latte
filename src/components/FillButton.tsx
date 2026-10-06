@@ -75,7 +75,7 @@ export default function FillButton({ fill = '#9fbb9a', textOnFill, className = '
         animate(false, e);
         rest.onPointerLeave?.(e);
       }}
-      className={`relative isolate cursor-pointer overflow-hidden disabled:cursor-default ${className}`}
+      className={`relative isolate inline-flex cursor-pointer items-center justify-center overflow-hidden leading-none disabled:cursor-default ${className}`}
     >
       <span ref={overlay} aria-hidden className="pointer-events-none absolute inset-0 -z-10" style={{ background: fill, transform: 'scaleX(0)', transformOrigin: 'left center' }} />
       <span ref={label} className="relative inline-flex items-center gap-1.5">

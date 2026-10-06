@@ -3,6 +3,7 @@ import gsap from 'gsap';
 import { Fluid } from './Fluid';
 import { Recorder } from './Recorder';
 import { PaperSim, type PaperEvents, type PaperOptions } from './PaperSim';
+import { catDataUrl } from '../art/cat';
 
 export type Mode = 'hero' | 'top';
 export type Interaction = 'none' | 'paint' | 'stir';
@@ -77,6 +78,9 @@ function flatInk(fill: string, hatch = PALETTE.jadeHatch, alongX = false, freq =
       uHatch: { value: new THREE.Color(hatch) },
       uAmount: { value: amount },
       uLightDir: { value: LIGHT_DIR },
+      // optional engraving: a full-colour decal (alpha = coverage), mapped onto the front of the body
+      uDecal: { value: null },
+      uDecalOn: { value: 0 },
     },
     defines: { HATCH_COORD: alongX ? 'vUv.x' : 'vUv.y', HATCH_FREQ: freq.toFixed(1) },
     vertexShader: /* glsl */ `
@@ -93,6 +97,8 @@ function flatInk(fill: string, hatch = PALETTE.jadeHatch, alongX = false, freq =
       uniform vec3 uHatch;
       uniform float uAmount;
       uniform vec3 uLightDir;
+      uniform sampler2D uDecal;
+      uniform float uDecalOn;
       varying vec3 vNormal;
       varying vec2 vUv;
       void main() {
@@ -100,6 +106,13 @@ function flatInk(fill: string, hatch = PALETTE.jadeHatch, alongX = false, freq =
         float stroke = 1.0 - smoothstep(0.07, 0.13, fract(HATCH_COORD * HATCH_FREQ));
         float zone = (1.0 - smoothstep(-0.12, 0.0, d)) * (1.0 - smoothstep(-0.3, -0.8, d) * 0.75);
         vec3 col = mix(uFill, uHatch, stroke * zone * uAmount);
+        // engraving on the front of the cup (u = 0 faces the hero camera; v runs up the wall).
+        // The patch is about 2.3x wider than tall in world units, matching the decal canvas.
+        vec2 e = vec2((fract(vUv.x + 0.5) - 0.5 + 0.09) / 0.18, (vUv.y - 0.48) / 0.44);
+        if (uDecalOn > 0.5 && e.x > 0.0 && e.x < 1.0 && e.y > 0.0 && e.y < 1.0) {
+          vec4 decal = texture2D(uDecal, e);
+          col = mix(col, decal.rgb, decal.a);
+        }
         gl_FragColor = vec4(col, 1.0);
         #include <colorspace_fragment>
       }
@@ -232,7 +245,9 @@ export class CoffeeScene {
     // cup body (flat jade with pen hatching), rim and inner bowl (flat pale), all with ink outlines
     const body = new THREE.LatheGeometry(bodyProfile(), 96);
     body.computeVertexNormals();
-    this.cup.add(inked(body, flatInk(PALETTE.jade)));
+    const bodyMaterial = flatInk(PALETTE.jade);
+    this.cup.add(inked(body, bodyMaterial));
+    this.loadEngraving(bodyMaterial);
     const rim = new THREE.LatheGeometry(rimProfile(), 96);
     rim.computeVertexNormals();
     this.cup.add(inked(rim, flatInk(PALETTE.inside, PALETTE.jadeHatch, false, 0, 0)));
@@ -319,9 +334,12 @@ export class CoffeeScene {
   /** Wipe the latte art back to plain coffee (undoable). */
   clearArt() {
     this.flushCheckpoint();
-    this.recorder.touch(this.clock.elapsedTime);
     this.fluid.reset();
     this.checkpoint();
+    // a clean cup starts the story over: the time-lapse and the numbers begin again from here
+    this.recorder.reset();
+    this.stats = { strokes: 0, pourSeconds: 0, stirSeconds: 0 };
+    this.captureFrame(this.clock.elapsedTime);
   }
 
   /** How heavy the pour is, 0..1 (the Flow slider): how fast the foam spreads from the stream. */
@@ -414,6 +432,39 @@ export class CoffeeScene {
     this.fluid.reset(true);
     this.fluid.clearHistory();
     this.checkpoint();
+  }
+
+  /** The engraving: the cat with "click anywhere to start" lettered under it, drawn into a texture. */
+  private loadEngraving(material: THREE.ShaderMaterial) {
+    const img = new Image();
+    img.onload = async () => {
+      // wait for the web font so the lettering is not drawn in a fallback face
+      try {
+        await document.fonts.ready;
+      } catch {
+        /* fonts API unavailable: draw anyway */
+      }
+      const w = 1024;
+      const h = 448;
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d')!;
+      const cat = 290;
+      ctx.drawImage(img, (w - cat) / 2, 14, cat, cat);
+      ctx.fillStyle = PALETTE.ink;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'alphabetic';
+      ctx.font = '500 48px "Apfel Grotezk", Inter, ui-sans-serif, system-ui, sans-serif';
+      ctx.fillText('click anywhere to start', w / 2, 392);
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.minFilter = THREE.LinearMipmapLinearFilter;
+      texture.anisotropy = 8;
+      material.uniforms.uDecal.value = texture;
+      material.uniforms.uDecalOn.value = 1;
+    };
+    img.src = catDataUrl(PALETTE.ink);
   }
 
   /** World units per screen pixel at distance 1, for the outline width. */

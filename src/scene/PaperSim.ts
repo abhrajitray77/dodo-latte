@@ -24,8 +24,12 @@ const TEAR_START = 150;
 /** Extra pull (px) per column of perforation torn after that. */
 const TEAR_STEP = 20;
 const GRAVITY = 1800; // px / s^2
-const DAMPING = 0.985;
-const ITERATIONS = 10;
+const DAMPING = 0.955; // paper in air, not a spring
+const ITERATIONS = 14;
+/** Strain under the pins (fraction of rest length) beyond which the paper slips in the fingers. */
+const SLIP_STRAIN = 0.08;
+/** How quickly the grip relaxes back toward the hanging sheet while it slips (per frame). */
+const SLIP_RATE = 0.3;
 
 const paperVertex = /* glsl */ `
   varying vec2 vUv;
@@ -252,6 +256,8 @@ export class PaperSim {
   pointerUp() {
     this.grabbed = -1;
     if (this.mode === 'free') this.mode = 'settling';
+    // paper stores no spring energy: whatever stretch the hand forced, letting go must not fling it
+    if (this.mode === 'hanging') this.prev.set(this.pos);
   }
 
   /** Release the next pin along the perforation, from whichever side the tear is running. */
@@ -266,6 +272,12 @@ export class PaperSim {
       col = this.tearFromLeft ? this.tornCols : COLS - 1 - this.tornCols;
     }
     this.pinned[col] = 0;
+    // the freed strip lets go without a recoil: drop the velocity near the tear
+    for (let j = 0; j < 4; j++) {
+      const k = (j * COLS + col) * 2;
+      this.prev[k] = this.pos[k];
+      this.prev[k + 1] = this.pos[k + 1];
+    }
     this.tornCols++;
     if (this.tornCols >= COLS) {
       // off the printer: from here the sheet is a stiff card. Start it where the cloth is now.
@@ -276,6 +288,7 @@ export class PaperSim {
         cx += this.pos[k * 2];
         cy += this.pos[k * 2 + 1];
       }
+      this.prev.set(this.pos);
       this.rigid = { cx: cx / n, cy: cy / n, angle: 0, blend: 0, from: this.pos.slice() };
       if (this.grabbed >= 0) this.grabOffset.set(this.rigid.cx - this.pointer.x, this.rigid.cy - this.pointer.y);
       this.mode = this.grabbed >= 0 ? 'free' : 'settling';
@@ -336,6 +349,12 @@ export class PaperSim {
     const dt2 = dt * dt;
     for (let k = 0; k < n; k++) {
       if (this.pinned[k]) continue;
+      if (k === this.grabbed) {
+        // held: no inertia of its own, the grip places it
+        this.prev[k * 2] = this.pos[k * 2];
+        this.prev[k * 2 + 1] = this.pos[k * 2 + 1];
+        continue;
+      }
       const i = k * 2;
       const vx = (this.pos[i] - this.prev[i]) * DAMPING;
       const vy = (this.pos[i + 1] - this.prev[i + 1]) * DAMPING;
@@ -344,6 +363,8 @@ export class PaperSim {
       this.pos[i] += vx + sway * (k / n) * dt2;
       this.pos[i + 1] += vy + GRAVITY * dt2;
     }
+
+    const g = this.grabbed * 2;
 
     // constraints, with the pins and the hand as hard positions
     for (let it = 0; it < ITERATIONS; it++) {
@@ -369,9 +390,32 @@ export class PaperSim {
         this.pos[k * 2] = this.rest[k * 2];
         this.pos[k * 2 + 1] = this.rest[k * 2 + 1];
       }
-      if (this.grabbed >= 0) {
-        this.pos[this.grabbed * 2] = this.pointer.x + this.grabOffset.x;
-        this.pos[this.grabbed * 2 + 1] = this.pointer.y + this.grabOffset.y;
+      if (this.grabbed >= 0 && this.mode === 'hanging') {
+        this.pos[g] = this.pointer.x + this.grabOffset.x;
+        this.pos[g + 1] = this.pointer.y + this.grabOffset.y;
+      }
+      // the printer housing is solid: nothing can rise back above the slot
+      for (let k = 0; k < n; k++) {
+        if (this.pos[k * 2 + 1] < this.opts.slotY) this.pos[k * 2 + 1] = this.opts.slotY;
+      }
+    }
+    if (this.grabbed >= 0 && this.mode === 'hanging') {
+      // Paper does not stretch: once the sheet pulls hard against the perforation, it slips in the
+      // fingers instead. Strain is read right under the pins, where a pinned sheet takes the load.
+      let strain = 0;
+      for (let c = 0; c < COLS; c++) {
+        if (!this.pinned[c]) continue;
+        const a = c * 2;
+        const b = (c + COLS) * 2;
+        const d = Math.hypot(this.pos[b] - this.pos[a], this.pos[b + 1] - this.pos[a + 1]);
+        strain = Math.max(strain, d / (this.opts.height / (ROWS - 1)) - 1);
+      }
+      const targetY = this.pointer.y + this.grabOffset.y;
+      if (strain > SLIP_STRAIN || targetY < this.opts.slotY + 8) {
+        // relax the grip toward where this point hangs at rest
+        const tx = this.pointer.x + this.grabOffset.x;
+        this.grabOffset.x += (this.rest[g] - tx) * SLIP_RATE;
+        this.grabOffset.y += (this.rest[g + 1] - targetY) * SLIP_RATE;
       }
     }
     this.upload();

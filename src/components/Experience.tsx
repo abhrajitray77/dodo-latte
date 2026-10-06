@@ -38,6 +38,21 @@ const RedoIcon = () => (
 );
 
 const STEP_NAMES: Partial<Record<Phase, string>> = { art: 'Pour', stir: 'Stir', receipt: 'Receipt' };
+const PORTFOLIO_URL = 'https://www.abhrajitray.com';
+
+/** A doodled red heart, inked. */
+const Heart = () => (
+  <svg viewBox="0 0 24 24" className="h-[15px] w-[15px]" aria-hidden>
+    <path
+      d="M12 20.3c-1.3-1-6.4-4.9-8-8.4C2.6 8.6 4.4 5.4 7.3 5.1c1.9-.2 3.5.9 4.7 2.5 1.1-1.6 2.7-2.8 4.7-2.6 3 .3 4.8 3.4 3.5 6.6-1.5 3.6-6.8 7.6-8.2 8.7Z"
+      fill="#d94a3a"
+      stroke="#2b1d12"
+      strokeWidth="1.6"
+      strokeLinejoin="round"
+    />
+    <path d="M7.6 8.6c.6-1 1.5-1.5 2.4-1.4" fill="none" stroke="#f6d7cf" strokeWidth="1.4" strokeLinecap="round" />
+  </svg>
+);
 
 /*
   The note card wanders as you move through the steps, always hugging the cup. The cup's size on
@@ -108,14 +123,17 @@ export default function Experience() {
     sceneRef.current?.setBrushSize(size);
   };
 
+  const starting = useRef(false);
   const start = async () => {
     const scene = sceneRef.current;
-    if (!scene || phase !== 'hero') return;
+    if (!scene || phase !== 'hero' || starting.current) return;
+    starting.current = true;
     setPhase('gliding');
     setCardSpot('art'); // the card travels while the camera glides
     scene.resetCoffee();
     await scene.setMode('top');
     setPhase('art');
+    starting.current = false;
     scene.setFlow(flow);
     scene.setBrushSize(brush);
     scene.setInteraction('paint');
@@ -153,7 +171,10 @@ export default function Experience() {
   const inStep = phase === 'art' || phase === 'stir' || phase === 'receipt';
 
   return (
-    <main className="relative h-dvh w-full select-none overflow-hidden bg-paper-strokes font-display text-ink">
+    <main
+      className={`relative h-dvh w-full select-none overflow-hidden bg-paper-strokes font-display text-ink ${phase === 'hero' ? 'cursor-pointer' : ''}`}
+      onClick={phase === 'hero' ? start : undefined}
+    >
       {/* Big type sits behind the canvas, so the cup floats in front of it */}
       <h1
         aria-hidden={phase !== 'hero'}
@@ -186,17 +207,32 @@ export default function Experience() {
           <span className="font-medium">Stir</span>
           <span className="text-ink/60"> · a tiny latte toy</span>
         </div>
-        <div className={`${pill} px-3.5 py-1.5 text-[13px] font-medium`}>
-          {inStep ? (
-            <>
-              <span className="h-2.5 w-2.5 rounded-full border-2 border-ink bg-sage" />
-              <span>
-                Step {STEP_INDEX[phase]} of 03 <span className="text-ink/50">·</span> {STEP_NAMES[phase]}
-              </span>
-            </>
-          ) : (
-            <span>Made with milk + WebGL</span>
-          )}
+        <div className="flex flex-col items-end gap-2">
+          <div className={`${pill} px-3.5 py-1.5 text-[13px] font-medium`}>
+            {inStep ? (
+              <>
+                <span className="h-2.5 w-2.5 rounded-full border-2 border-ink bg-sage" />
+                <span>
+                  Step {STEP_INDEX[phase]} of 03 <span className="text-ink/50">·</span> {STEP_NAMES[phase]}
+                </span>
+              </>
+            ) : (
+              <span>Made with milk + WebGL</span>
+            )}
+          </div>
+          {/* credit: clickable, above everything else */}
+          <a
+            href={PORTFOLIO_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className={`${pill} pointer-events-auto relative z-50 flex-col items-end gap-0 rounded-2xl px-3.5 py-2 text-[13px] leading-snug`}
+          >
+            <span className="flex items-center gap-1.5 font-medium">
+              Built with Astro <Heart />
+            </span>
+            <span className="text-ink/70">by @abhrajitray</span>
+          </a>
         </div>
       </header>
 
@@ -308,7 +344,7 @@ export default function Experience() {
                   title={b.name}
                   onClick={() => pickBrush(b.id)}
                   fill={FILL.faint}
-                  className={`grid h-10 w-10 place-items-center rounded-full transition-colors duration-200 ${brush === b.id ? 'bg-ink text-paper' : ''}`}
+                  className={`h-10 w-10 rounded-full transition-colors duration-200 ${brush === b.id ? 'bg-ink text-paper' : ''}`}
                 >
                   <span className="rounded-full bg-current" style={{ width: b.dot, height: b.dot }} />
                 </FillButton>
