@@ -8,8 +8,8 @@ import * as THREE from 'three';
  * Life of a receipt:
  *  printing  - rigid, fed out of the slot
  *  hanging   - pinned along the top row, swings and droops; pulling tears pins one by one
- *  free      - fully torn, follows the hand
- *  settling  - drifts to the middle of the screen and comes to rest
+ *  free      - fully torn: a stiff card that follows the hand and tilts a little with the motion
+ *  settling  - drifts to the middle of the screen and comes to rest flat
  */
 
 export type PaperOptions = { width: number; height: number; slotY: number };
@@ -45,6 +45,7 @@ const paperFragment = /* glsl */ `
   varying vec3 vNormal;
   void main() {
     vec4 c = texture2D(uMap, vUv);
+    if (c.a < 0.02) discard; // the zigzag teeth and anything outside the paper
     float facing = abs(normalize(vNormal).z);
     c.rgb *= 0.72 + 0.28 * facing;
     gl_FragColor = c;
@@ -62,7 +63,6 @@ export class PaperSim {
   private positions: Float32Array;
   private texture: THREE.CanvasTexture;
   private paper: THREE.Mesh;
-  private shadow: THREE.Mesh;
   private dim: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
 
   // simulation state (CSS px)
@@ -81,6 +81,11 @@ export class PaperSim {
   private tearFromLeft = true;
   private tearBothSides = false;
   private releaseAt = 0;
+  // once torn off, the sheet moves as one stiff piece: centre + tilt, blended in from the cloth pose
+  private rigid = { cx: 0, cy: 0, angle: 0, blend: 1, from: null as Float32Array | null };
+  private restCentre = new THREE.Vector2();
+  private lastPointer = new THREE.Vector2();
+  private handVel = new THREE.Vector2();
   private vw = 1;
   private vh = 1;
 
@@ -120,11 +125,15 @@ export class PaperSim {
 
     this.paper = new THREE.Mesh(
       this.geometry,
-      new THREE.ShaderMaterial({ vertexShader: paperVertex, fragmentShader: paperFragment, uniforms: { uMap: { value: this.texture } }, side: THREE.DoubleSide }),
+      new THREE.ShaderMaterial({
+        vertexShader: paperVertex,
+        fragmentShader: paperFragment,
+        uniforms: { uMap: { value: this.texture } },
+        side: THREE.DoubleSide,
+        transparent: true,
+      }),
     );
-    this.shadow = new THREE.Mesh(this.geometry, new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.32, depthWrite: false, side: THREE.DoubleSide }));
-    this.shadow.position.set(10, 18, -1);
-    this.scene.add(this.shadow, this.paper);
+    this.scene.add(this.paper);
 
     this.dim = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: 0x140d09, transparent: true, opacity: 0, depthWrite: false }));
     this.dimScene.add(this.dim);
@@ -173,6 +182,7 @@ export class PaperSim {
         this.rest[k * 2 + 1] = slotY + (j / (ROWS - 1)) * height;
       }
     }
+    this.restCentre.set(x0 + width / 2, slotY + height / 2);
   }
 
   resize(width: number, height: number) {
@@ -211,10 +221,16 @@ export class PaperSim {
     }
     if (best < 0) return;
     this.grabbed = best;
-    this.grabOffset.set(this.pos[best * 2] - x, this.pos[best * 2 + 1] - y);
     this.pointer.set(x, y);
+    this.lastPointer.set(x, y);
     this.pullStart.set(x, y);
-    if (this.mode === 'settling') this.mode = 'free';
+    if (this.isTorn) {
+      // torn off: carry the whole sheet by its centre
+      this.grabOffset.set(this.rigid.cx - x, this.rigid.cy - y);
+      this.mode = 'free';
+    } else {
+      this.grabOffset.set(this.pos[best * 2] - x, this.pos[best * 2 + 1] - y);
+    }
   }
 
   pointerMove(x: number, y: number) {
@@ -240,6 +256,16 @@ export class PaperSim {
     this.pinned[col] = 0;
     this.tornCols++;
     if (this.tornCols >= COLS) {
+      // off the printer: from here the sheet is a stiff card. Start it where the cloth is now.
+      const n = COLS * ROWS;
+      let cx = 0;
+      let cy = 0;
+      for (let k = 0; k < n; k++) {
+        cx += this.pos[k * 2];
+        cy += this.pos[k * 2 + 1];
+      }
+      this.rigid = { cx: cx / n, cy: cy / n, angle: 0, blend: 0, from: this.pos.slice() };
+      if (this.grabbed >= 0) this.grabOffset.set(this.rigid.cx - this.pointer.x, this.rigid.cy - this.pointer.y);
       this.mode = this.grabbed >= 0 ? 'free' : 'settling';
       this.events.onTorn?.();
     }
@@ -270,6 +296,12 @@ export class PaperSim {
       return;
     }
 
+    if (this.isTorn) {
+      this.updateRigid(dt);
+      this.upload();
+      return;
+    }
+
     // tearing: how far the hand has pulled the sheet from where it was grabbed
     if (this.grabbed >= 0 && this.mode === 'hanging') {
       const dx = this.pointer.x - this.pullStart.x;
@@ -287,29 +319,18 @@ export class PaperSim {
       }
     }
 
-    // forces + Verlet integration
-    const settling = this.mode === 'settling';
-    const gravity = this.mode === 'free' ? GRAVITY * 0.35 : settling ? 0 : GRAVITY;
-    const sway = this.mode === 'hanging' && this.grabbed < 0 ? Math.sin(this.time * 1.7) * 60 : 0;
+    // forces + Verlet integration (hanging from the slot)
+    const sway = this.grabbed < 0 ? Math.sin(this.time * 1.7) * 60 : 0;
     const dt2 = dt * dt;
     for (let k = 0; k < n; k++) {
       if (this.pinned[k]) continue;
       const i = k * 2;
-      let vx = (this.pos[i] - this.prev[i]) * (settling ? 0.9 : DAMPING);
-      let vy = (this.pos[i + 1] - this.prev[i + 1]) * (settling ? 0.9 : DAMPING);
+      const vx = (this.pos[i] - this.prev[i]) * DAMPING;
+      const vy = (this.pos[i + 1] - this.prev[i + 1]) * DAMPING;
       this.prev[i] = this.pos[i];
       this.prev[i + 1] = this.pos[i + 1];
-      let ax = sway * (k / n);
-      let ay = gravity;
-      if (settling) {
-        // drift to the middle of the screen and flatten out
-        const tx = this.rest[i];
-        const ty = this.rest[i + 1] + (this.vh - this.opts.height) / 2 - this.opts.slotY;
-        ax += (tx - this.pos[i]) * 40;
-        ay += (ty - this.pos[i + 1]) * 40;
-      }
-      this.pos[i] += vx + ax * dt2;
-      this.pos[i + 1] += vy + ay * dt2;
+      this.pos[i] += vx + sway * (k / n) * dt2;
+      this.pos[i + 1] += vy + GRAVITY * dt2;
     }
 
     // constraints, with the pins and the hand as hard positions
@@ -344,6 +365,55 @@ export class PaperSim {
     this.upload();
   }
 
+  /** Torn off: one stiff sheet. Follows the hand with a little lag and tilt, or drifts to the centre. */
+  private updateRigid(dt: number) {
+    const r = this.rigid;
+    // hand speed, smoothed, for the tilt
+    const vx = (this.pointer.x - this.lastPointer.x) / dt;
+    const vy = (this.pointer.y - this.lastPointer.y) / dt;
+    this.lastPointer.copy(this.pointer);
+    const k = 1 - Math.exp(-dt * 12);
+    this.handVel.x += (vx - this.handVel.x) * k;
+    this.handVel.y += (vy - this.handVel.y) * k;
+
+    let angleTarget = 0;
+    if (this.mode === 'free' && this.grabbed >= 0) {
+      const tx = this.pointer.x + this.grabOffset.x;
+      const ty = this.pointer.y + this.grabOffset.y;
+      const follow = 1 - Math.exp(-dt * 28); // almost direct, a touch of weight
+      r.cx += (tx - r.cx) * follow;
+      r.cy += (ty - r.cy) * follow;
+      angleTarget = THREE.MathUtils.clamp(-this.handVel.x * 0.00045, -0.09, 0.09);
+    } else {
+      // settle in the middle of the screen
+      const tx = this.vw / 2;
+      const ty = this.vh / 2;
+      const ease = 1 - Math.exp(-dt * 5);
+      r.cx += (tx - r.cx) * ease;
+      r.cy += (ty - r.cy) * ease;
+      this.handVel.set(0, 0);
+    }
+    r.angle += (angleTarget - r.angle) * (1 - Math.exp(-dt * 8));
+
+    const c = Math.cos(r.angle);
+    const s = Math.sin(r.angle);
+    if (r.blend < 1) r.blend = Math.min(1, r.blend + dt / 0.35);
+    const b = smooth(r.blend);
+    for (let i = 0; i < COLS * ROWS; i++) {
+      const rx = this.rest[i * 2] - this.restCentre.x;
+      const ry = this.rest[i * 2 + 1] - this.restCentre.y;
+      let x = r.cx + c * rx - s * ry;
+      let y = r.cy + s * rx + c * ry;
+      if (r.from && b < 1) {
+        x = r.from[i * 2] + (x - r.from[i * 2]) * b;
+        y = r.from[i * 2 + 1] + (y - r.from[i * 2 + 1]) * b;
+      }
+      this.pos[i * 2] = this.prev[i * 2] = x;
+      this.pos[i * 2 + 1] = this.prev[i * 2 + 1] = y;
+    }
+    if (r.blend >= 1) r.from = null;
+  }
+
   private upload() {
     for (let k = 0; k < COLS * ROWS; k++) {
       this.positions[k * 3] = this.pos[k * 2];
@@ -371,7 +441,6 @@ export class PaperSim {
     this.geometry.dispose();
     this.texture.dispose();
     (this.paper.material as THREE.Material).dispose();
-    (this.shadow.material as THREE.Material).dispose();
     this.dim.geometry.dispose();
     this.dim.material.dispose();
   }
