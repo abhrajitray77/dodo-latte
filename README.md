@@ -77,3 +77,9 @@ Build with `pnpm build`. The output is in `dist/`.
 - gifenc by Matt DesLauriers, MIT
 - The fluid solver is a trimmed take on the classic stable-fluids approach popularised by Pavel Dobryakov's WebGL fluid demo
 - Sample latte-art photos in the pour step are reference images used for inspiration only
+
+## Licence
+
+Copyright 2026 Abhrajit Ray. All rights reserved.
+
+The source is public so it can be reviewed. It is not licensed for reuse, in whole or in part. The vendored gifenc library in `src/vendor/gifenc` keeps its own MIT licence.

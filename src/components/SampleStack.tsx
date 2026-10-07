@@ -7,7 +7,7 @@ import { audio } from '../audio/engine';
  * Click the top one: it lifts, slides behind, and the other comes forward. Desktop only.
  */
 const SAMPLES = [
-  { src: '/4643253f793b29fef9c3cca48b32b440.jpg', caption: 'swan on the water' },
+  { src: '/4643253f793b29fef9c3cca48b32b440.jpg', caption: 'sunset by the beach' },
   { src: '/51524192cd6047f0cbd55ad64b2d797e.webp', caption: 'a tulip, stacked' },
 ];
 
@@ -58,7 +58,7 @@ export default function SampleStack({ className = '', style }: { className?: str
           </button>
         );
       })}
-      <p className="pointer-events-none absolute -bottom-7 left-0 font-mono text-[11px] tracking-[0.12em] text-ink/60 uppercase">Ideas · click to flip</p>
+      <p className="pointer-events-none absolute -top-7 left-0 font-mono text-[11px] tracking-[0.12em] text-ink/60 uppercase">Ideas · click to flip</p>
     </div>
   );
 }

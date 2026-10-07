@@ -46,7 +46,8 @@ export default function Receipt({
   // as big as the screen allows, up to 1.4x the base design
   // the printer art is 100px wider than the paper and must fit the screen too
   const phone = window.innerWidth < 1024;
-  const scale = Math.min(phone ? 1 : 1.4, (window.innerWidth - 116) / RECEIPT_WIDTH, (window.innerHeight - (phone ? 330 : 150)) / RECEIPT_HEIGHT);
+  // height budget: the printer above the paper and the button row below it
+  const scale = Math.min(phone ? 1 : 1.4, (window.innerWidth - 116) / RECEIPT_WIDTH, (window.innerHeight - (phone ? 330 : 290)) / RECEIPT_HEIGHT);
   const width = RECEIPT_WIDTH * scale;
   const height = RECEIPT_HEIGHT * scale;
   // the printer artwork is a little wider than the paper; the paper starts at its slot
