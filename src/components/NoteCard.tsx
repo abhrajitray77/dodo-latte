@@ -14,7 +14,7 @@ const TINT: Record<NoteTint, string> = {
 };
 
 // the hard offset shadow is a desktop flourish; on phones it only crowds the smaller layout
-export const flatShadow = 'shadow-[6px_8px_0_0_#c9a97c] max-md:shadow-none';
+export const flatShadow = 'shadow-[6px_8px_0_0_#c9a97c] max-lg:shadow-none';
 
 export default function NoteCard({
   step,

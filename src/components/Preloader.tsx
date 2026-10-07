@@ -81,14 +81,14 @@ export default function Preloader({ onDone }: { onDone: () => void }) {
         </g>
       </svg>
       <div className="relative text-center">
-        <p ref={title} className="text-[22px] font-medium tracking-[-0.01em] md:text-[28px]" aria-hidden>
+        <p ref={title} className="text-[22px] font-medium tracking-[-0.01em] lg:text-[28px]" aria-hidden>
           {'Crema Corner'.split('').map((ch, i) => (
             <span key={i} className="inline-block">
               {ch === ' ' ? ' ' : ch}
             </span>
           ))}
         </p>
-        <p ref={script} className="font-script text-[40px] leading-none text-ink/85 md:text-[52px]">
+        <p ref={script} className="font-script text-[40px] leading-none text-ink/85 lg:text-[52px]">
           Latte Art Bar
         </p>
       </div>

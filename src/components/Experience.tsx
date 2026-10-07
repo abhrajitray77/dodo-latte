@@ -100,7 +100,7 @@ export default function Experience() {
     if (!scene) return;
     const tray = phase === 'art' ? artTrayRef.current : phase === 'stir' ? stirTrayRef.current : null;
     const apply = () => {
-      const phone = window.innerWidth < 768;
+      const phone = window.innerWidth < 1024;
       const top = phone && tray ? Math.max(headerRef.current?.getBoundingClientRect().bottom ?? 0, topHintRef.current?.getBoundingClientRect().bottom ?? 0) : 0;
       scene.setInsets(top, phone && tray ? tray.getBoundingClientRect().height : 0);
     };
@@ -247,16 +247,16 @@ export default function Experience() {
       {/* Big type sits behind the canvas, so the cup floats in front of it */}
       <div
         aria-hidden={phase !== 'hero'}
-        className={`pointer-events-none absolute top-14 left-5 origin-top-left text-left transition-all duration-700 ease-out md:top-16 md:left-8 ${
+        className={`pointer-events-none absolute top-14 left-5 origin-top-left text-left transition-all duration-700 ease-out lg:top-16 lg:left-8 ${
           phase === 'hero' ? 'opacity-100 blur-0' : 'scale-110 opacity-0 blur-sm'
         }`}
       >
-        <h1 className="text-[17vw] leading-[0.82] font-medium tracking-[-0.05em] md:text-[11vw]">
+        <h1 className="text-[17vw] leading-[0.82] font-medium tracking-[-0.05em] lg:text-[11vw]">
           Crema
           <br />
           Corner
         </h1>
-        <h2 className="font-script mt-[1.5vw] text-[7vw] leading-none text-ink/85 md:text-[4vw]">Latte Art Bar</h2>
+        <h2 className="font-script mt-[1.5vw] text-[7vw] leading-none text-ink/85 lg:text-[4vw]">Latte Art Bar</h2>
       </div>
 
       <canvas ref={canvasRef} className="absolute inset-0 h-full w-full touch-none" />
@@ -277,7 +277,7 @@ export default function Experience() {
       )}
 
       {/* Beans on the table, hero only (they would sit over the cup in the top view) */}
-      <Beans className={`hidden transition-opacity duration-700 md:block ${phase === 'hero' || phase === 'gliding' ? 'opacity-100' : 'opacity-0'}`} />
+      <Beans className={`hidden transition-opacity duration-700 lg:block ${phase === 'hero' || phase === 'gliding' ? 'opacity-100' : 'opacity-0'}`} />
 
       {/* Steam: three inked curls rising from the cup, hero only */}
       <svg
@@ -291,23 +291,23 @@ export default function Experience() {
       </svg>
 
       {/* Top bar */}
-      <header ref={headerRef} className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-3 md:p-7">
+      <header ref={headerRef} className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-3 lg:p-7">
         {/* the small lockup once the big title has gone (desktop only; phones keep the space) */}
-        <div className={`hidden leading-none transition-opacity duration-500 md:block ${phase === 'hero' || phase === 'gliding' ? 'opacity-0' : 'opacity-100'}`}>
+        <div className={`hidden leading-none transition-opacity duration-500 lg:block ${phase === 'hero' || phase === 'gliding' ? 'opacity-0' : 'opacity-100'}`}>
           <p className="text-[16px] font-medium tracking-[-0.01em]">Crema Corner</p>
           <p className="font-script mt-0.5 text-[21px] leading-none text-ink/80">Latte Art Bar</p>
         </div>
         <div className="ml-auto flex flex-col items-end gap-2">
           <div className="flex items-center gap-2">
             {/* step chip (compact on phones); "made with" only on desktop */}
-            <div className={`${chip} ${inStep ? '' : 'max-md:hidden'}`}>
+            <div className={`${chip} ${inStep ? '' : 'max-lg:hidden'}`}>
               {inStep ? (
                 <>
                   <span className="h-2.5 w-2.5 rounded-full border-2 border-ink bg-sage" />
-                  <span className="hidden md:inline">
+                  <span className="hidden lg:inline">
                     Step {STEP_INDEX[phase]} of 03 <span className="text-ink/50">·</span> {STEP_NAMES[phase]}
                   </span>
-                  <span className="md:hidden">{STEP_INDEX[phase]} / 03</span>
+                  <span className="lg:hidden">{STEP_INDEX[phase]} / 03</span>
                 </>
               ) : (
                 <span>Made with milk + WebGL</span>
@@ -335,7 +335,7 @@ export default function Experience() {
                   <path d="m15.5 9.5 5 5m0-5-5 5" />
                 )}
               </Icon>
-              <span className="hidden md:inline">{sound ? 'Sound on' : 'Sound off'}</span>
+              <span className="hidden lg:inline">{sound ? 'Sound on' : 'Sound off'}</span>
             </FillButton>
           </div>
           {/* credit: clickable, above everything else (desktop; phones get a line under the Start button) */}
@@ -344,7 +344,7 @@ export default function Experience() {
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className={`pointer-events-auto relative z-50 flex flex-col items-end ${type.label} leading-snug text-ink/80 max-md:hidden`}
+            className={`pointer-events-auto relative z-50 flex flex-col items-end ${type.label} leading-snug text-ink/80 max-lg:hidden`}
           >
             <span className="flex items-center gap-1.5 font-medium">
               Built with Astro <Heart /> by @abhrajitray
@@ -355,7 +355,7 @@ export default function Experience() {
       </header>
 
       {(phase === 'art' || phase === 'stir') && (
-        <FillButton type="button" onClick={back} fill={FILL.faint} className={`${chip} absolute top-3 left-3 md:top-20 md:left-7`}>
+        <FillButton type="button" onClick={back} fill={FILL.faint} className={`${chip} absolute top-3 left-3 lg:top-20 lg:left-7`}>
           <Icon>
             <path d="M15 5l-7 7 7 7" />
           </Icon>
@@ -378,7 +378,7 @@ export default function Experience() {
           target="_blank"
           rel="noopener noreferrer"
           onClick={(e) => e.stopPropagation()}
-          className={`flex flex-col items-center ${type.label} leading-snug text-ink/70 md:hidden`}
+          className={`flex flex-col items-center ${type.label} leading-snug text-ink/70 lg:hidden`}
         >
           <span className="flex items-center gap-1">
             Built with Astro <Heart /> by @abhrajitray
@@ -389,7 +389,7 @@ export default function Experience() {
 
       {/* The travelling note card: one spot per step, content crossfades as it moves */}
       <div
-        className={`pointer-events-none absolute top-0 left-0 hidden transition-[transform,opacity] duration-700 ease-[cubic-bezier(.2,.8,.2,1)] md:block ${
+        className={`pointer-events-none absolute top-0 left-0 hidden transition-[transform,opacity] duration-700 ease-[cubic-bezier(.2,.8,.2,1)] lg:block ${
           phase === 'receipt' && receiptState === 'torn' ? 'opacity-0' : 'opacity-100'
         }`}
         style={{ width: CARD_WIDTH, transform: CARD_SPOT[cardSpot] }}
@@ -436,7 +436,7 @@ export default function Experience() {
       {/* Phones: the step hint sits under the header, above the cup */}
       <div
         ref={topHintRef}
-        className={`pointer-events-none absolute inset-x-0 top-[58px] flex justify-center px-3 transition-opacity duration-500 md:hidden ${
+        className={`pointer-events-none absolute inset-x-0 top-[58px] flex justify-center px-3 transition-opacity duration-500 lg:hidden ${
           phase === 'art' || (phase === 'stir' && !active) ? 'opacity-100' : 'opacity-0'
         }`}
       >
@@ -448,12 +448,12 @@ export default function Experience() {
       {/* Latte art controls: two tight rows on phones, one row on desktop */}
       <div
         ref={artTrayRef}
-        className={`pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center gap-2 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] transition-all duration-500 md:gap-3 md:p-7 ${
+        className={`pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center gap-2 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] transition-all duration-500 lg:gap-3 lg:p-7 ${
           phase === 'art' ? 'translate-y-0 opacity-100 [&>*]:pointer-events-auto' : 'translate-y-6 opacity-0'
         }`}
       >
-        <div className={`${card} flex w-full max-w-[420px] flex-col gap-2.5 px-3 py-2.5 md:w-auto md:max-w-none md:flex-row md:flex-wrap md:items-end md:justify-center md:gap-x-6 md:gap-y-4 md:px-5 md:py-4`}>
-          <div className="flex items-end justify-between gap-3 md:contents">
+        <div className={`${card} flex w-full max-w-[420px] flex-col gap-2.5 px-3 py-2.5 lg:w-auto lg:max-w-none lg:flex-row lg:flex-wrap lg:items-end lg:justify-center lg:gap-x-6 lg:gap-y-4 lg:px-5 lg:py-4`}>
+          <div className="flex items-end justify-between gap-3 lg:contents">
             <div>
               <span className={groupLabel}>History</span>
               <div className={controlGroup}>
@@ -487,7 +487,7 @@ export default function Experience() {
                     title={b.name}
                     onClick={() => pickBrush(b.id)}
                     fill={FILL.faint}
-                    className={`h-8 w-8 rounded-full transition-colors duration-200 md:h-10 md:w-10 ${brush === b.id ? 'bg-ink text-paper' : ''}`}
+                    className={`h-8 w-8 rounded-full transition-colors duration-200 lg:h-10 lg:w-10 ${brush === b.id ? 'bg-ink text-paper' : ''}`}
                   >
                     <span className="rounded-full bg-current" style={{ width: b.dot * 0.8, height: b.dot * 0.8 }} />
                   </FillButton>
@@ -496,7 +496,7 @@ export default function Experience() {
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-2 md:contents">
+          <div className="grid grid-cols-3 gap-2 lg:contents">
             {(
               [
                 ['Flow', flow, changeFlow, 'How heavy the pour is'],
@@ -509,13 +509,13 @@ export default function Experience() {
                   {name} <span className="font-mono text-ink/50">{Math.round(value * 100)}%</span>
                 </span>
                 <div className={controlField}>
-                  <Slider value={value} onChange={change} label={name} className="w-full md:w-32" />
+                  <Slider value={value} onChange={change} label={name} className="w-full lg:w-32" />
                 </div>
               </div>
             ))}
           </div>
 
-          <FillButton type="button" onClick={stir} fill={FILL.ink} textOnFill={FILL.paper} className={`${button('accent')} w-full md:order-last md:w-auto`}>
+          <FillButton type="button" onClick={stir} fill={FILL.ink} textOnFill={FILL.paper} className={`${button('accent')} w-full lg:order-last lg:w-auto`}>
             Stir it
             <span aria-hidden>→</span>
           </FillButton>
@@ -525,7 +525,7 @@ export default function Experience() {
       {/* Stir controls */}
       <div
         ref={stirTrayRef}
-        className={`pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center gap-3 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] transition-all duration-500 md:p-7 ${
+        className={`pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center gap-3 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] transition-all duration-500 lg:p-7 ${
           phase === 'stir' ? 'translate-y-0 opacity-100 [&>*]:pointer-events-auto' : 'translate-y-6 opacity-0'
         }`}
       >

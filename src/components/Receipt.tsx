@@ -13,7 +13,7 @@ export type ReceiptState = 'printing' | 'attached' | 'torn';
 type State = ReceiptState;
 const FPS = 10;
 const HOLD_FRAMES = 10; // pause on the finished cup before the loop restarts
-const PRINTER_TOP = typeof window !== 'undefined' && window.innerWidth < 768 ? 60 : 12;
+const PRINTER_TOP = typeof window !== 'undefined' && window.innerWidth < 1024 ? 60 : 12;
 
 /**
  * The receipt UI. The sheet itself is simulated and drawn by the scene (PaperSim); this component
@@ -45,7 +45,7 @@ export default function Receipt({
 
   // as big as the screen allows, up to 1.4x the base design
   // the printer art is 100px wider than the paper and must fit the screen too
-  const phone = window.innerWidth < 768;
+  const phone = window.innerWidth < 1024;
   const scale = Math.min(phone ? 1 : 1.4, (window.innerWidth - 116) / RECEIPT_WIDTH, (window.innerHeight - (phone ? 330 : 150)) / RECEIPT_HEIGHT);
   const width = RECEIPT_WIDTH * scale;
   const height = RECEIPT_HEIGHT * scale;
@@ -188,7 +188,7 @@ export default function Receipt({
 
       {/* hints and actions */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center gap-3 p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
-        <p className={`${chip} transition-opacity duration-500 md:hidden ${state === 'attached' ? 'opacity-100' : 'opacity-0'}`}>Grab the receipt and pull it off</p>
+        <p className={`${chip} transition-opacity duration-500 lg:hidden ${state === 'attached' ? 'opacity-100' : 'opacity-0'}`}>Grab the receipt and pull it off</p>
         <div className={`flex flex-wrap justify-center gap-3 transition-all duration-500 ${state === 'torn' ? 'pointer-events-auto translate-y-0 opacity-100' : 'translate-y-4 opacity-0'}`}>
           <div className={`${chip} cursor-default gap-2 py-1 pr-1`} onPointerDown={(e) => e.stopPropagation()}>
             <span className={`${type.ui} font-medium text-ink/70`}>Save receipt</span>
