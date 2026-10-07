@@ -229,6 +229,9 @@ export class CoffeeScene {
   private strokeChanged = false;
   private pendingCheckpoint = 0;
   private onPointer?: (active: boolean) => void;
+  /** Every frame: is milk pouring / is the cup being stirred, and how hard. Drives the sound. */
+  private onActivity?: (kind: 'pour' | 'stir', active: boolean, intensity: number) => void;
+  private stirMotion = 0;
   private onHistory?: (canUndo: boolean, canRedo: boolean) => void;
 
   constructor(private canvas: HTMLCanvasElement) {
@@ -294,6 +297,10 @@ export class CoffeeScene {
   /** Called with true while the user is painting or stirring. */
   setPointerListener(fn: (active: boolean) => void) {
     this.onPointer = fn;
+  }
+
+  setActivityListener(fn: (kind: 'pour' | 'stir', active: boolean, intensity: number) => void) {
+    this.onActivity = fn;
   }
 
   /** Called whenever undo / redo availability changes. */
@@ -544,6 +551,7 @@ export class CoffeeScene {
       if (this.interaction === 'stir') {
         const k = this.fluid.simSize * 55;
         this.fluid.addForce(uv.x, uv.y, dx * k, dy * k, 0.0025);
+        this.stirMotion += Math.hypot(dx, dy);
       } else {
         // paint: the milk follows the pointer (and keeps pouring every frame in the loop)
         this.paintSegment(this.lastUv.x, this.lastUv.y, uv.x, uv.y, BRUSH[this.brush]);
@@ -608,6 +616,12 @@ export class CoffeeScene {
     if (this.interaction === 'stir' && this.dragging) {
       this.stats.stirSeconds += dt;
       this.recorder.touch(time);
+    }
+    if (this.onActivity) {
+      this.onActivity('pour', this.interaction === 'paint' && this.dragging && !!this.lastUv, this.flow);
+      const speed = this.stirMotion / Math.max(dt, 1e-3); // uv per second
+      this.stirMotion = 0;
+      this.onActivity('stir', this.interaction === 'stir' && this.dragging, Math.min(1, speed * 1.5));
     }
 
     this.fluid.step(dt);

@@ -13,7 +13,7 @@ import * as THREE from 'three';
  */
 
 export type PaperOptions = { width: number; height: number; slotY: number };
-export type PaperEvents = { onPrinted?: () => void; onTorn?: () => void };
+export type PaperEvents = { onPrinted?: () => void; onTearStart?: () => void; onTorn?: () => void };
 type Mode = 'printing' | 'hanging' | 'free' | 'settling';
 
 const COLS = 9;
@@ -271,6 +271,7 @@ export class PaperSim {
     } else {
       col = this.tearFromLeft ? this.tornCols : COLS - 1 - this.tornCols;
     }
+    if (this.tornCols === 0) this.events.onTearStart?.();
     this.pinned[col] = 0;
     // the freed strip lets go without a recoil: drop the velocity near the tear
     for (let j = 0; j < 4; j++) {

@@ -111,7 +111,7 @@ export function drawPolaroid(ctx: CanvasRenderingContext2D, data: ReceiptData, i
   ctx.fillText(`#${String(data.orderNo).padStart(4, '0')}  ${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`, PAD, POLAROID_H - 18);
   ctx.textAlign = 'right';
   ctx.fillText(`● ${stage} ${String(Math.min(index, data.frames.length - 1) + 1).padStart(3, '0')}`, POLAROID_W - PAD, POLAROID_H - 18);
-  ctx.font = `500 15px "Apfel Grotezk", Inter, ui-sans-serif, system-ui, sans-serif`;
+  ctx.font = `500 13px "Apfel Grotezk", Inter, ui-sans-serif, system-ui, sans-serif`;
   ctx.fillStyle = INK;
-  ctx.fillText('stir', POLAROID_W - PAD, POLAROID_H - 38);
+  ctx.fillText('Crema Corner', POLAROID_W - PAD, POLAROID_H - 38);
 }

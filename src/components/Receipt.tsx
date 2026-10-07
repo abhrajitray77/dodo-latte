@@ -7,6 +7,7 @@ import FillButton from './FillButton';
 import { RECEIPT_HEIGHT, RECEIPT_WIDTH, drawReceiptBase, drawReceiptFrame, type ReceiptData } from '../receipt/draw';
 import { encodeGif, downloadBlob } from '../receipt/gif';
 import Polaroid from './Polaroid';
+import { audio } from '../audio/engine';
 
 export type ReceiptState = 'printing' | 'attached' | 'torn';
 type State = ReceiptState;
@@ -63,6 +64,7 @@ export default function Receipt({
     base.width = canvas.width;
     base.height = canvas.height;
     drawReceiptBase(base.getContext('2d')!, data, RECEIPT_WIDTH, RECEIPT_HEIGHT, dpr);
+    document.fonts?.load('600 23px Caveat').then(() => drawReceiptBase(base.getContext('2d')!, data, RECEIPT_WIDTH, RECEIPT_HEIGHT, dpr)).catch(() => {});
 
     const scratch = { src: document.createElement('canvas'), big: document.createElement('canvas') };
     scratch.src.width = scratch.src.height = data.frameSize;
@@ -79,8 +81,14 @@ export default function Receipt({
 
     const paper = scene.showPaper(canvas, { width, height, slotY }, {
       onPrinted: () => setState('attached'),
-      onTorn: () => setState('torn'),
+      onTearStart: () => audio.rip(false),
+      onTorn: () => {
+        audio.rip(true);
+        audio.bell(84, 0.25, 0.14, 1.2);
+        setState('torn');
+      },
     });
+    audio.printer(2.5); // 0.3 s delay + 2.2 s feed in PaperSim
     paperRef.current = paper;
 
     let raf = 0;

@@ -6,6 +6,7 @@ import NoteCard from './NoteCard';
 import { FILL, buttonAccent, buttonPrimary, card, groupLabel, iconButton, pill } from './ui';
 import FillButton from './FillButton';
 import type { ReceiptData } from '../receipt/draw';
+import { audio } from '../audio/engine';
 
 type Phase = 'hero' | 'gliding' | 'art' | 'stir' | 'receipt';
 
@@ -80,6 +81,7 @@ export default function Experience() {
   const [brush, setBrush] = useState<BrushSize>('xl');
   const [flow, setFlow] = useState(0.5);
   const [receipt, setReceipt] = useState<ReceiptData | null>(null);
+  const [sound, setSound] = useState(!audio.muted);
   const [cardSpot, setCardSpot] = useState<CardSpot>('hero');
   const [receiptState, setReceiptState] = useState<ReceiptState>('printing');
 
@@ -89,6 +91,7 @@ export default function Experience() {
     const scene = new CoffeeScene(canvas);
     scene.setPointerListener(setActive);
     scene.setHistoryListener((undo, redo) => setHistory({ undo, redo }));
+    scene.setActivityListener((kind, active, k) => (kind === 'pour' ? audio.pour(active, k) : audio.stir(active, k)));
     sceneRef.current = scene;
     return () => {
       scene.dispose();
@@ -123,11 +126,26 @@ export default function Experience() {
     sceneRef.current?.setBrushSize(size);
   };
 
+  // browsers only start audio from a gesture: the first press anywhere wakes the engine and the loop
+  const wakeAudio = () => {
+    audio.ensure();
+    audio.startMusic();
+  };
+
+  const toggleSound = () => {
+    audio.ensure();
+    const muted = !audio.muted;
+    audio.setMuted(muted);
+    setSound(!muted);
+    if (!muted) audio.startMusic();
+  };
+
   const starting = useRef(false);
   const start = async () => {
     const scene = sceneRef.current;
     if (!scene || phase !== 'hero' || starting.current) return;
     starting.current = true;
+    audio.whoosh();
     setPhase('gliding');
     setCardSpot('art'); // the card travels while the camera glides
     scene.resetCoffee();
@@ -162,6 +180,7 @@ export default function Experience() {
     if (!scene) return;
     scene.setInteraction('none');
     setReceipt(null);
+    audio.whoosh();
     setPhase('gliding');
     setCardSpot('hero');
     await scene.setMode('hero');
@@ -174,16 +193,22 @@ export default function Experience() {
     <main
       className={`relative h-dvh w-full select-none overflow-hidden bg-paper-strokes font-display text-ink ${phase === 'hero' ? 'cursor-pointer' : ''}`}
       onClick={phase === 'hero' ? start : undefined}
+      onPointerDownCapture={wakeAudio}
     >
       {/* Big type sits behind the canvas, so the cup floats in front of it */}
-      <h1
+      <div
         aria-hidden={phase !== 'hero'}
-        className={`pointer-events-none absolute top-11 left-4 origin-top-left text-left text-[32vw] leading-[0.8] font-medium tracking-[-0.06em] transition-all duration-700 ease-out md:top-14 md:left-7 md:text-[22vw] ${
+        className={`pointer-events-none absolute top-14 left-5 origin-top-left text-left transition-all duration-700 ease-out md:top-16 md:left-8 ${
           phase === 'hero' ? 'opacity-100 blur-0' : 'scale-110 opacity-0 blur-sm'
         }`}
       >
-        stir
-      </h1>
+        <h1 className="text-[17vw] leading-[0.82] font-medium tracking-[-0.05em] md:text-[11vw]">
+          Crema
+          <br />
+          Corner
+        </h1>
+        <h2 className="font-script mt-[1.5vw] text-[7vw] leading-none text-ink/85 md:text-[4vw]">Latte Art Bar</h2>
+      </div>
 
       <canvas ref={canvasRef} className="absolute inset-0 h-full w-full touch-none" />
 
@@ -203,12 +228,15 @@ export default function Experience() {
 
       {/* Top bar */}
       <header className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-5 md:p-7">
-        <div className="text-[15px] leading-tight">
-          <span className="font-medium">Stir</span>
-          <span className="text-ink/60"> · a tiny latte toy</span>
+        <div className="flex flex-col items-start gap-2">
+          <div className={`leading-none transition-opacity duration-500 ${phase === 'hero' || phase === 'gliding' ? 'opacity-0' : 'opacity-100'}`}>
+            <p className="text-[16px] font-medium tracking-[-0.01em]">Crema Corner</p>
+            <p className="font-script mt-0.5 text-[21px] leading-none text-ink/80">Latte Art Bar</p>
+          </div>
         </div>
         <div className="flex flex-col items-end gap-2">
-          <div className={`${pill} px-3.5 py-1.5 text-[13px] font-medium`}>
+          <div className="flex items-center gap-2">
+            <div className={`${pill} px-3.5 py-1.5 text-[13px] font-medium`}>
             {inStep ? (
               <>
                 <span className="h-2.5 w-2.5 rounded-full border-2 border-ink bg-sage" />
@@ -219,6 +247,30 @@ export default function Experience() {
             ) : (
               <span>Made with milk + WebGL</span>
             )}
+            </div>
+          <FillButton
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleSound();
+              }}
+              fill={FILL.faint}
+              aria-pressed={sound}
+              className={`${pill} pointer-events-auto relative z-50 px-3.5 py-1.5 text-[13px] font-medium`}
+            >
+              <Icon>
+                <path d="M4 10v4h3l4 3.5v-11L7 10H4Z" />
+                {sound ? (
+                  <>
+                    <path d="M15 9.5a3.5 3.5 0 0 1 0 5" />
+                    <path d="M17.5 7a7 7 0 0 1 0 10" />
+                  </>
+                ) : (
+                  <path d="m15.5 9.5 5 5m0-5-5 5" />
+                )}
+              </Icon>
+              {sound ? 'Sound on' : 'Sound off'}
+            </FillButton>
           </div>
           {/* credit: clickable, above everything else */}
           <a

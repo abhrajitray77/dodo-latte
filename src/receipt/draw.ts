@@ -146,13 +146,14 @@ export function drawReceiptBase(ctx: CanvasRenderingContext2D, data: ReceiptData
 
   // header
   ctx.textAlign = 'center';
-  ctx.font = `700 34px ${FONT}`;
-  ctx.fillText('STIR', width / 2, 62);
+  ctx.font = `700 26px ${FONT}`;
+  ctx.fillText('CREMA CORNER', width / 2, 54);
+  ctx.font = `600 23px Caveat, "Segoe Script", cursive`;
+  ctx.fillText('Latte Art Bar', width / 2, 78);
   ctx.font = `11px ${FONT}`;
-  ctx.fillText('LATTE BAR  ·  COUNTER 01', width / 2, 82);
   const d = data.date;
   ctx.fillText(
-    `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}   ${pad2(d.getHours())}:${pad2(d.getMinutes())}   #${String(data.orderNo).padStart(4, '0')}`,
+    `COUNTER 01  ·  ${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}  ·  #${String(data.orderNo).padStart(4, '0')}`,
     width / 2,
     98,
   );

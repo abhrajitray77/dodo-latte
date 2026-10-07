@@ -1,5 +1,6 @@
 import { useRef, type ButtonHTMLAttributes, type PointerEvent as ReactPointerEvent } from 'react';
 import gsap from 'gsap';
+import { audio } from '../audio/engine';
 
 /**
  * Directional hover fill (ported from the Cream Studio Framer override): a fill layer inside the
@@ -67,6 +68,10 @@ export default function FillButton({ fill = '#9fbb9a', textOnFill, className = '
     <button
       {...rest}
       disabled={disabled}
+      onClick={(e) => {
+        audio.click();
+        rest.onClick?.(e);
+      }}
       onPointerEnter={(e) => {
         animate(true, e);
         rest.onPointerEnter?.(e);

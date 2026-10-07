@@ -21,6 +21,7 @@
 @theme {
   --font-display: "Apfel Grotezk", "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --font-script: "Caveat", "Segoe Script", "Bradley Hand", cursive;
 
   /* inked illustration: tan paper, dark ink, sage ceramic */
   --color-paper: #e6cfa6;
