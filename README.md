@@ -2,7 +2,7 @@
 
 A small interactive toy. You pour milk into a cup of coffee, draw your latte art, stir it in, and print a receipt that you tear off the printer. The receipt carries a time-lapse of your cup.
 
-Live: https://dodo-latte.abhrajitray77.workers.dev/
+Live: https://dodolatte.abhrajitray.com/
 
 Built as my take-home for the Design Engineer role at Dodo Payments.
 
