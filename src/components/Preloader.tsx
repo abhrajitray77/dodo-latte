@@ -5,9 +5,8 @@ const INK = '#2b1d12';
 const MIN_SHOW = 2.8; // seconds the loader stays even if everything is ready sooner
 
 /**
- * The loading sheet: painted colour washes radiating in toward a light centre, a still inked cup
- * tilted toward you, the latte art pouring itself in line by line, "Crema Corner" rising in and
- * "Latte Art Bar" writing itself in cursive. When fonts are in and the minimum time has passed,
+ * The loading sheet: a noisy matcha green, a still inked cup tilted toward you, "Crema Corner"
+ * rising in and "Latte Art Bar" writing itself in cursive. When fonts are in and the minimum time has passed,
  * the whole sheet lifts away upward.
  */
 export default function Preloader({ onDone }: { onDone: () => void }) {
@@ -19,18 +18,14 @@ export default function Preloader({ onDone }: { onDone: () => void }) {
   useEffect(() => {
     document.getElementById('boot')?.remove(); // the static backdrop from the page, no longer needed
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const lines = Array.from(art.current?.querySelectorAll<SVGElement>('[data-art]') ?? []);
     const letters = Array.from(title.current?.querySelectorAll<HTMLElement>('span') ?? []);
     const tl = gsap.timeline();
 
     if (reduce) {
-      gsap.set(lines, { strokeDashoffset: 0 });
       gsap.set([letters, script.current], { opacity: 1, y: 0, clipPath: 'inset(0 0 0 0)' });
     } else {
-      // the latte art pours itself into the still cup: stem, then the leaves, the wings, the heart last
-      gsap.set(lines, { strokeDasharray: 1, strokeDashoffset: 1 });
-      tl.to(lines, { strokeDashoffset: 0, duration: 1.1, ease: 'power2.inOut', stagger: { each: 0.11, ease: 'power1.in' } }, 0.2);
-      // the name rises in letter by letter
+      // the cup fades up, then the name rises in letter by letter
+      gsap.fromTo(art.current, { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.7, ease: 'power2.out' });
       gsap.set(letters, { opacity: 0, y: 14 });
       tl.to(letters, { opacity: 1, y: 0, duration: 0.5, ease: 'power3.out', stagger: 0.035 }, 0.6);
       // the cursive writes itself: a wipe from left to right
@@ -58,13 +53,6 @@ export default function Preloader({ onDone }: { onDone: () => void }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // a rosetta like the reference: wide at the crown, arches narrowing down to the tip
-  const arches = [0, 1, 2, 3, 4, 5, 6].map((k) => {
-    const y = 104 + k * 6.5;
-    const w = 44 - k * 5.2;
-    return `M${160 - w} ${y + 5} Q 160 ${y - 7} ${160 + w} ${y + 5}`;
-  });
-
   return (
     <div ref={root} className="fixed inset-0 z-[100] flex flex-col items-center justify-center gap-6 overflow-hidden px-6 text-ink will-change-transform" aria-label="Loading">
       {/* one colour: a noisy matcha green, like a flat-painted sheet */}
@@ -90,16 +78,6 @@ export default function Preloader({ onDone }: { onDone: () => void }) {
           <path d="M270 128 C 320 124, 326 186, 272 194" />
           <path d="M273 142 C 304 142, 306 178, 273 184" />
           <path strokeWidth={1.8} d="M232 170 l 10 -6 M 236 186 l 10 -7 M 228 200 l 10 -7 M 216 214 l 10 -7" opacity={0.75} />
-          {/* the latte art: pours itself in */}
-          <g strokeWidth={2.4}>
-            <path data-art pathLength={1} d="M160 146 L 160 92" />
-            {arches.map((d, i) => (
-              <path key={i} data-art pathLength={1} d={d} />
-            ))}
-            <path data-art pathLength={1} d="M150 98 C 128 86, 96 92, 90 110 C 86 122, 98 132, 112 128" />
-            <path data-art pathLength={1} d="M170 98 C 192 86, 224 92, 230 110 C 234 122, 222 132, 208 128" />
-            <path data-art pathLength={1} d="M160 100 c -9 -12 -24 -2 -2 14 c 24 -16 9 -26 2 -14" />
-          </g>
         </g>
       </svg>
       <div className="relative text-center">

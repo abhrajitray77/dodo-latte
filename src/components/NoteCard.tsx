@@ -13,7 +13,8 @@ const TINT: Record<NoteTint, string> = {
   peach: 'bg-[#fbf1e6]',
 };
 
-export const flatShadow = 'shadow-[6px_8px_0_0_#c9a97c]';
+// the hard offset shadow is a desktop flourish; on phones it only crowds the smaller layout
+export const flatShadow = 'shadow-[6px_8px_0_0_#c9a97c] max-md:shadow-none';
 
 export default function NoteCard({
   step,

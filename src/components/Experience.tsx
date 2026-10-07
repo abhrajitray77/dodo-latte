@@ -436,7 +436,7 @@ export default function Experience() {
       {/* Phones: the step hint sits under the header, above the cup */}
       <div
         ref={topHintRef}
-        className={`pointer-events-none absolute inset-x-0 top-[54px] flex justify-center px-3 transition-opacity duration-500 md:hidden ${
+        className={`pointer-events-none absolute inset-x-0 top-[58px] flex justify-center px-3 transition-opacity duration-500 md:hidden ${
           phase === 'art' || (phase === 'stir' && !active) ? 'opacity-100' : 'opacity-0'
         }`}
       >
