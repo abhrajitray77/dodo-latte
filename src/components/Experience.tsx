@@ -5,6 +5,7 @@ import Beans from './Beans';
 import PourHint, { HINT_SEEN_KEY } from './PourHint';
 import Slider from './Slider';
 import Preloader from './Preloader';
+import SampleStack from './SampleStack';
 import NoteCard from './NoteCard';
 import { FILL, button, card, chip, controlField, controlGroup, groupLabel, iconButton, pill, type } from './ui';
 import FillButton from './FillButton';
@@ -369,7 +370,11 @@ export default function Experience() {
           phase === 'hero' ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-4 opacity-0'
         }`}
       >
-        <p className={`${type.lead} text-ink/80`}>Make your own latte, then keep the receipt.</p>
+        <p className={`${type.lead} text-center leading-snug text-ink/80`}>
+          <span className="font-medium text-ink">The barista is you today.</span>
+          <br />
+          Draw a heart in the foam, or a mess. Both are fine.
+        </p>
         <FillButton type="button" onClick={start} fill={FILL.sage} textOnFill={FILL.ink} className={`${button('primary', 'lg')} focus-visible:ring-2 focus-visible:ring-sage focus-visible:outline-none`}>
           Start pouring
         </FillButton>
@@ -432,6 +437,14 @@ export default function Experience() {
           </NoteCard>
         </div>
       </div>
+
+      {/* Step 01, desktop: two sample photos stacked at the right rim of the cup */}
+      <SampleStack
+        className={`hidden transition-[transform,opacity] duration-700 ease-[cubic-bezier(.2,.8,.2,1)] lg:block ${
+          phase === 'art' ? 'opacity-100' : 'pointer-events-none opacity-0'
+        }`}
+        style={{ transform: `translate(min(calc(50vw + 48vh + 16px), calc(100vw - 230px - 1.25rem)), ${phase === 'art' ? '24vh' : '28vh'})` }}
+      />
 
       {/* Phones: the step hint sits under the header, above the cup */}
       <div

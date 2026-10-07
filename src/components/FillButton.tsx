@@ -41,6 +41,8 @@ export default function FillButton({ fill = '#9fbb9a', textOnFill, className = '
 
   const animate = (entering: boolean, e: ReactPointerEvent<HTMLButtonElement>) => {
     if (disabled) return;
+    // hover is a mouse idea: on touch (and pen) a tap would leave the fill stuck on, so skip it
+    if (e.pointerType !== 'mouse') return;
     const el = e.currentTarget;
     state.current.edge = edgeFromPointer(el.getBoundingClientRect(), e.clientX, e.clientY);
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;

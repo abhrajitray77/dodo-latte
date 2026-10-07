@@ -48,6 +48,10 @@ const buttonSize = {
   lg: 'h-12 px-8 text-base lg:h-14 lg:px-10 lg:text-lg',
 };
 export const button = (fill: keyof typeof buttonFill, size: keyof typeof buttonSize = 'md') => `${buttonBase} ${buttonFill[fill]} ${buttonSize[size]}`;
+/** A labelled group of small buttons, the same height as a md button so it lines up beside one. */
+export const buttonGroup = `inline-flex h-10 items-center gap-1.5 rounded-full border-2 border-ink bg-paper-light pl-4 pr-1.5 lg:h-12 lg:pr-2 ${flatShadow}`;
+export const buttonGroupLabel = `${type.ui} font-medium text-ink/70`;
+export const buttonInner = 'h-7 rounded-full border-2 border-ink bg-paper-light px-3 text-sm font-medium lg:h-8 lg:px-3.5';
 export const buttonPrimary = button('primary');
 export const buttonAccent = button('accent');
 export const buttonQuiet = button('quiet');

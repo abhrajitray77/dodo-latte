@@ -2,6 +2,8 @@ import { useEffect, useRef } from 'react';
 import gsap from 'gsap';
 
 const INK = '#2b1d12';
+const CREAM = '#f4efe4';
+const TERRA = '#c96a3d';
 const MIN_SHOW = 2.8; // seconds the loader stays even if everything is ready sooner
 
 /**
@@ -70,25 +72,24 @@ export default function Preloader({ onDone }: { onDone: () => void }) {
 
       <svg ref={art} viewBox="0 0 340 300" className="relative h-[min(300px,40vh)] w-auto overflow-visible" aria-hidden>
         <g transform="rotate(-12 170 160)" fill="none" stroke={INK} strokeWidth={3.2} strokeLinecap="round" strokeLinejoin="round">
-          {/* the cup, still: rim, inside edge, body, foot, handle */}
-          <ellipse cx={160} cy={110} rx={110} ry={46} />
-          <ellipse cx={160} cy={112} rx={94} ry={36} />
-          <path d="M50 110 C 52 180, 80 232, 160 236 C 240 232, 268 180, 270 110" />
+          {/* the cup, still: handle (a ring, behind the body), cream body and rim, terracotta coffee */}
+          <path d="M258 118 C 332 108, 344 196, 240 204 L 240 186 C 302 186, 306 138, 258 136 Z" fill={CREAM} />
+          <path d="M50 110 C 52 180, 80 232, 160 236 C 240 232, 268 180, 270 110 Z" fill={CREAM} />
+          <ellipse cx={160} cy={110} rx={110} ry={46} fill={CREAM} />
+          <ellipse cx={160} cy={112} rx={94} ry={36} fill={TERRA} />
           <path d="M118 236 Q 160 250 202 236" />
-          <path d="M270 128 C 320 124, 326 186, 272 194" />
-          <path d="M273 142 C 304 142, 306 178, 273 184" />
           <path strokeWidth={1.8} d="M232 170 l 10 -6 M 236 186 l 10 -7 M 228 200 l 10 -7 M 216 214 l 10 -7" opacity={0.75} />
         </g>
       </svg>
       <div className="relative text-center">
-        <p ref={title} className="text-[22px] font-medium tracking-[-0.01em] lg:text-[28px]" aria-hidden>
+        <p ref={title} className="text-[22px] font-medium tracking-[-0.01em] text-[#f4efe4] lg:text-[28px]" aria-hidden>
           {'Crema Corner'.split('').map((ch, i) => (
             <span key={i} className="inline-block">
               {ch === ' ' ? ' ' : ch}
             </span>
           ))}
         </p>
-        <p ref={script} className="font-script text-[40px] leading-none text-ink/85 lg:text-[52px]">
+        <p ref={script} className="font-script text-[40px] leading-none text-[#c96a3d] lg:text-[52px]">
           Latte Art Bar
         </p>
       </div>

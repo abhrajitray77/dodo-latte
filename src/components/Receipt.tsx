@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } f
 import type { CoffeeScene } from '../scene/CoffeeScene';
 import type { PaperSim } from '../scene/PaperSim';
 import Printer, { PRINTER_SLOT_Y, PRINTER_VIEW_W } from './Printer';
-import { FILL, button, chip, type } from './ui';
+import { FILL, button, buttonGroup, buttonGroupLabel, buttonInner, chip } from './ui';
 import FillButton from './FillButton';
 import { RECEIPT_HEIGHT, RECEIPT_WIDTH, drawReceiptBase, drawReceiptFrame, type ReceiptData } from '../receipt/draw';
 import { encodeGif, downloadBlob } from '../receipt/gif';
@@ -190,12 +190,12 @@ export default function Receipt({
       <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center gap-3 p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
         <p className={`${chip} transition-opacity duration-500 lg:hidden ${state === 'attached' ? 'opacity-100' : 'opacity-0'}`}>Grab the receipt and pull it off</p>
         <div className={`flex flex-wrap justify-center gap-3 transition-all duration-500 ${state === 'torn' ? 'pointer-events-auto translate-y-0 opacity-100' : 'translate-y-4 opacity-0'}`}>
-          <div className={`${chip} cursor-default gap-2 py-1 pr-1`} onPointerDown={(e) => e.stopPropagation()}>
-            <span className={`${type.ui} font-medium text-ink/70`}>Save receipt</span>
-            <FillButton type="button" onClick={save} fill={FILL.ink} textOnFill={FILL.paper} className={`${button('quiet', 'sm')} shadow-none`}>
+          <div className={`${buttonGroup} cursor-default`} onPointerDown={(e) => e.stopPropagation()}>
+            <span className={`${buttonGroupLabel} mr-1`}>Save receipt</span>
+            <FillButton type="button" onClick={save} fill={FILL.ink} textOnFill={FILL.paper} className={buttonInner}>
               PNG
             </FillButton>
-            <FillButton type="button" onClick={downloadGif} disabled={!!busy} fill={FILL.ink} textOnFill={FILL.paper} className={`${button('quiet', 'sm')} shadow-none disabled:opacity-60`}>
+            <FillButton type="button" onClick={downloadGif} disabled={!!busy} fill={FILL.ink} textOnFill={FILL.paper} className={`${buttonInner} disabled:opacity-60`}>
               {busy ?? 'GIF'}
             </FillButton>
           </div>
