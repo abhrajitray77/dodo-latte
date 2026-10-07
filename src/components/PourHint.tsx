@@ -52,7 +52,7 @@ export default function PourHint({ active, onDone }: { active: boolean; onDone: 
           <path d="M26 24v7M32 26v6M38 29v4" fill="none" stroke={INK} strokeWidth={2} strokeLinecap="round" />
         </g>
       </svg>
-      <p className={`${pill} px-4 py-2 text-[14px] font-medium`}>
+      <p className={pill}>
         <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-[2]" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
           <path d="M12 19V5" />
           <path d="m6 11 6-6 6 6" />

@@ -4,8 +4,9 @@ import Receipt, { type ReceiptState } from './Receipt';
 import Beans from './Beans';
 import PourHint, { HINT_SEEN_KEY } from './PourHint';
 import Slider from './Slider';
+import Preloader from './Preloader';
 import NoteCard from './NoteCard';
-import { FILL, buttonAccent, buttonPrimary, card, groupLabel, iconButton, pill } from './ui';
+import { FILL, button, card, chip, controlField, controlGroup, groupLabel, iconButton, pill, type } from './ui';
 import FillButton from './FillButton';
 import type { ReceiptData } from '../receipt/draw';
 import { audio } from '../audio/engine';
@@ -87,6 +88,7 @@ export default function Experience() {
   const [receipt, setReceipt] = useState<ReceiptData | null>(null);
   const [sound, setSound] = useState(!audio.muted);
   const [pourHint, setPourHint] = useState(false);
+  const [loading, setLoading] = useState(true);
   const artTrayRef = useRef<HTMLDivElement>(null);
   const stirTrayRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLElement>(null);
@@ -298,7 +300,7 @@ export default function Experience() {
         <div className="ml-auto flex flex-col items-end gap-2">
           <div className="flex items-center gap-2">
             {/* step chip (compact on phones); "made with" only on desktop */}
-            <div className={`${pill} px-2.5 py-1 text-xs font-medium md:px-3.5 md:py-1.5 md:text-[13px] ${inStep ? '' : 'max-md:hidden'}`}>
+            <div className={`${chip} ${inStep ? '' : 'max-md:hidden'}`}>
               {inStep ? (
                 <>
                   <span className="h-2.5 w-2.5 rounded-full border-2 border-ink bg-sage" />
@@ -320,7 +322,7 @@ export default function Experience() {
               fill={FILL.faint}
               aria-pressed={sound}
               aria-label={sound ? 'Sound on' : 'Sound off'}
-              className={`${pill} pointer-events-auto relative z-50 px-2 py-1 text-xs font-medium md:px-3.5 md:py-1.5 md:text-[13px]`}
+              className={`${chip} pointer-events-auto relative z-50`}
             >
               <Icon>
                 <path d="M4 10v4h3l4 3.5v-11L7 10H4Z" />
@@ -342,7 +344,7 @@ export default function Experience() {
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className={`${pill} pointer-events-auto relative z-50 flex-col items-end gap-0 rounded-2xl px-3.5 py-2 text-[13px] leading-snug max-md:hidden`}
+            className={`pointer-events-auto relative z-50 flex flex-col items-end ${type.label} leading-snug text-ink/80 max-md:hidden`}
           >
             <span className="flex items-center gap-1.5 font-medium">
               Built with Astro <Heart /> by @abhrajitray
@@ -353,7 +355,7 @@ export default function Experience() {
       </header>
 
       {(phase === 'art' || phase === 'stir') && (
-        <FillButton type="button" onClick={back} fill={FILL.faint} className={`${pill} absolute top-3 left-3 px-3 py-1.5 text-sm font-medium md:top-20 md:left-7 md:px-4 md:py-2 md:text-[14px]`}>
+        <FillButton type="button" onClick={back} fill={FILL.faint} className={`${chip} absolute top-3 left-3 md:top-20 md:left-7`}>
           <Icon>
             <path d="M15 5l-7 7 7 7" />
           </Icon>
@@ -367,8 +369,8 @@ export default function Experience() {
           phase === 'hero' ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-4 opacity-0'
         }`}
       >
-        <p className="text-sm text-ink/80 md:text-[17px]">Make your own latte, then keep the receipt.</p>
-        <FillButton type="button" onClick={start} fill={FILL.sage} textOnFill={FILL.ink} className={`${buttonPrimary} px-8 py-3 text-base md:px-10 md:py-4 md:text-lg focus-visible:ring-2 focus-visible:ring-sage focus-visible:outline-none`}>
+        <p className={`${type.lead} text-ink/80`}>Make your own latte, then keep the receipt.</p>
+        <FillButton type="button" onClick={start} fill={FILL.sage} textOnFill={FILL.ink} className={`${button('primary', 'lg')} focus-visible:ring-2 focus-visible:ring-sage focus-visible:outline-none`}>
           Start pouring
         </FillButton>
         <a
@@ -376,7 +378,7 @@ export default function Experience() {
           target="_blank"
           rel="noopener noreferrer"
           onClick={(e) => e.stopPropagation()}
-          className="flex flex-col items-center text-xs leading-snug text-ink/70 md:hidden"
+          className={`flex flex-col items-center ${type.label} leading-snug text-ink/70 md:hidden`}
         >
           <span className="flex items-center gap-1">
             Built with Astro <Heart /> by @abhrajitray
@@ -396,13 +398,13 @@ export default function Experience() {
           <NoteCard title="How it works" tilt={0} pin="#9fbb9a">
             <ol className="space-y-2">
               <li>
-                <span className="font-mono text-[13px] text-[#c96a3d]">01 </span>Pour milk onto the coffee and shape your latte art.
+                <span className={`${type.mono} text-[#c96a3d]`}>01 </span>Pour milk onto the coffee and shape your latte art.
               </li>
               <li>
-                <span className="font-mono text-[13px] text-[#c96a3d]">02 </span>Stir it in with your finger.
+                <span className={`${type.mono} text-[#c96a3d]`}>02 </span>Stir it in with your finger.
               </li>
               <li>
-                <span className="font-mono text-[13px] text-[#c96a3d]">03 </span>Print the receipt and tear it off. It holds a time-lapse of your cup.
+                <span className={`${type.mono} text-[#c96a3d]`}>03 </span>Print the receipt and tear it off. It holds a time-lapse of your cup.
               </li>
             </ol>
           </NoteCard>
@@ -411,7 +413,7 @@ export default function Experience() {
           <NoteCard step="STEP 01" title="Pour the milk" tint="jade" tilt={0}>
             <p>Press and drag on the coffee to pour.</p>
             <p>Pause in one place for a round blob. Wiggle side to side for leaves. A quick, thin pull through the middle makes the point.</p>
-            <p className="text-[13px] text-ink/60">Ctrl + Z undoes a stroke.</p>
+            <p className={`${type.label} text-ink/60`}>Ctrl + Z undoes a stroke.</p>
           </NoteCard>
         </div>
         <div className={`transition-opacity duration-500 ${cardSpot === 'stir' ? 'opacity-100' : 'absolute inset-x-0 top-0 opacity-0'}`}>
@@ -434,11 +436,11 @@ export default function Experience() {
       {/* Phones: the step hint sits under the header, above the cup */}
       <div
         ref={topHintRef}
-        className={`pointer-events-none absolute inset-x-0 top-[3.4rem] flex justify-center px-3 transition-opacity duration-500 md:hidden ${
+        className={`pointer-events-none absolute inset-x-0 top-[54px] flex justify-center px-3 transition-opacity duration-500 md:hidden ${
           phase === 'art' || (phase === 'stir' && !active) ? 'opacity-100' : 'opacity-0'
         }`}
       >
-        <p className={`${pill} px-3 py-1.5 text-center text-xs`}>
+        <p className={`${chip} text-center`}>
           {phase === 'stir' ? 'Drag in circles to stir' : 'Press and drag to pour. Wiggle for leaves. Pull through for the point.'}
         </p>
       </div>
@@ -454,7 +456,7 @@ export default function Experience() {
           <div className="flex items-end justify-between gap-3 md:contents">
             <div>
               <span className={groupLabel}>History</span>
-              <div className="flex items-center gap-0.5 rounded-full border-2 border-ink p-1 md:gap-1">
+              <div className={controlGroup}>
                 <FillButton type="button" fill={FILL.faint} className={iconButton} onClick={() => sceneRef.current?.undo()} disabled={!history.undo} aria-label="Undo" title="Undo (Ctrl+Z)">
                   <UndoIcon />
                 </FillButton>
@@ -474,7 +476,7 @@ export default function Experience() {
 
             <div>
               <span className={groupLabel}>Pour size</span>
-              <div className="flex items-center gap-0.5 rounded-full border-2 border-ink p-1 md:gap-1" role="radiogroup" aria-label="Pour size">
+              <div className={controlGroup} role="radiogroup" aria-label="Pour size">
                 {BRUSHES.map((b) => (
                   <FillButton
                     key={b.id}
@@ -506,14 +508,14 @@ export default function Experience() {
                 <span className={groupLabel}>
                   {name} <span className="font-mono text-ink/50">{Math.round(value * 100)}%</span>
                 </span>
-                <div className="flex h-9 items-center rounded-full border-2 border-ink px-2.5 md:h-12 md:px-4">
+                <div className={controlField}>
                   <Slider value={value} onChange={change} label={name} className="w-full md:w-32" />
                 </div>
               </div>
             ))}
           </div>
 
-          <FillButton type="button" onClick={stir} fill={FILL.ink} textOnFill={FILL.paper} className={`${buttonAccent} h-10 w-full py-0 md:order-last md:h-12 md:w-auto`}>
+          <FillButton type="button" onClick={stir} fill={FILL.ink} textOnFill={FILL.paper} className={`${button('accent')} w-full md:order-last md:w-auto`}>
             Stir it
             <span aria-hidden>→</span>
           </FillButton>
@@ -530,7 +532,7 @@ export default function Experience() {
         <div className={`${card} flex flex-wrap items-end justify-center gap-x-6 gap-y-4 px-5 py-4`}>
           <div>
             <span className={groupLabel}>History</span>
-            <div className="flex items-center gap-1 rounded-full border-2 border-ink p-1">
+            <div className={controlGroup}>
               <FillButton type="button" fill={FILL.faint} className={iconButton} onClick={() => sceneRef.current?.undo()} disabled={!history.undo} aria-label="Undo" title="Undo (Ctrl+Z)">
                 <UndoIcon />
               </FillButton>
@@ -539,12 +541,14 @@ export default function Experience() {
               </FillButton>
             </div>
           </div>
-          <FillButton type="button" onClick={printReceipt} fill={FILL.ink} textOnFill={FILL.paper} className={`${buttonAccent} h-12 py-0`}>
+          <FillButton type="button" onClick={printReceipt} fill={FILL.ink} textOnFill={FILL.paper} className={button('accent')}>
             Print receipt
             <span aria-hidden>→</span>
           </FillButton>
         </div>
       </div>
+
+      {loading && <Preloader onDone={() => setLoading(false)} />}
 
       {/* Receipt: the scene dims and a sheet of paper prints from the printer (drawn by the scene) */}
       {phase === 'receipt' && receipt && sceneRef.current && <Receipt data={receipt} scene={sceneRef.current} onAgain={back} onState={setReceiptState} />}

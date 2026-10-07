@@ -3,7 +3,7 @@ import type { ReceiptData } from '../receipt/draw';
 import { POLAROID_H, POLAROID_W, drawPolaroid } from '../receipt/polaroid';
 import { encodeGif, downloadBlob } from '../receipt/gif';
 import FillButton from './FillButton';
-import { FILL, buttonPrimary, buttonQuiet } from './ui';
+import { FILL, button } from './ui';
 
 const FPS = 10;
 const HOLD_FRAMES = 10;
@@ -84,7 +84,7 @@ export default function Polaroid({ data, visible }: { data: ReceiptData; visible
         <canvas ref={canvasRef} style={{ width, height }} className="block" aria-label="A looping picture of your latte" />
       </div>
       <div className="flex flex-wrap justify-center gap-3">
-        <FillButton type="button" onClick={download} disabled={!!busy} fill={FILL.sage} textOnFill={FILL.ink} className={`${buttonPrimary} disabled:opacity-60`}>
+        <FillButton type="button" onClick={download} disabled={!!busy} fill={FILL.sage} textOnFill={FILL.ink} className={`${button('primary')} disabled:opacity-60`}>
           {busy ?? 'Download GIF'}
         </FillButton>
       </div>

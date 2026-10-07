@@ -98,3 +98,14 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .pour-hint-ring, .pour-hint-hand { animation: none; }
 }
+
+/* Preloader: one colour, a matcha green with a fine grain so it reads as paint, not a flat fill. */
+.matcha-base {
+  background: radial-gradient(ellipse 80% 70% at 50% 45%, #a9c49d 0%, #93b088 60%, #7f9c76 100%);
+}
+.matcha-grain {
+  filter: url(#matcha-grain);
+  background: #000;
+  mix-blend-mode: multiply;
+  opacity: 0.85;
+}

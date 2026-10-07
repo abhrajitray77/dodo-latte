@@ -16,6 +16,8 @@ import '../styles/global.css';
     <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
   </head>
   <body class="h-dvh overflow-hidden">
+    <!-- covers the page until the React preloader mounts, so there is no flash of the bare hero -->
+    <div id="boot" class="bg-paper-strokes fixed inset-0 z-[99]"></div>
     <Experience client:only="react" />
   </body>
 </html>

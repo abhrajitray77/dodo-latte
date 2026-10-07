@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } f
 import type { CoffeeScene } from '../scene/CoffeeScene';
 import type { PaperSim } from '../scene/PaperSim';
 import Printer, { PRINTER_SLOT_Y, PRINTER_VIEW_W } from './Printer';
-import { FILL, buttonQuiet, pill } from './ui';
+import { FILL, button, chip, type } from './ui';
 import FillButton from './FillButton';
 import { RECEIPT_HEIGHT, RECEIPT_WIDTH, drawReceiptBase, drawReceiptFrame, type ReceiptData } from '../receipt/draw';
 import { encodeGif, downloadBlob } from '../receipt/gif';
@@ -188,18 +188,18 @@ export default function Receipt({
 
       {/* hints and actions */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center gap-3 p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
-        <p className={`${pill} px-3 py-1.5 text-xs transition-opacity duration-500 md:hidden ${state === 'attached' ? 'opacity-100' : 'opacity-0'}`}>Grab the receipt and pull it off</p>
+        <p className={`${chip} transition-opacity duration-500 md:hidden ${state === 'attached' ? 'opacity-100' : 'opacity-0'}`}>Grab the receipt and pull it off</p>
         <div className={`flex flex-wrap justify-center gap-3 transition-all duration-500 ${state === 'torn' ? 'pointer-events-auto translate-y-0 opacity-100' : 'translate-y-4 opacity-0'}`}>
-          <div className={`${pill} cursor-default gap-2 pl-4`} onPointerDown={(e) => e.stopPropagation()}>
-            <span className="text-[14px] font-medium text-ink/70">Save receipt</span>
-            <FillButton type="button" onClick={save} fill={FILL.ink} textOnFill={FILL.paper} className="rounded-full border-2 border-ink bg-paper-light px-4 py-2 text-[14px] font-medium">
+          <div className={`${chip} cursor-default gap-2 py-1 pr-1`} onPointerDown={(e) => e.stopPropagation()}>
+            <span className={`${type.ui} font-medium text-ink/70`}>Save receipt</span>
+            <FillButton type="button" onClick={save} fill={FILL.ink} textOnFill={FILL.paper} className={`${button('quiet', 'sm')} shadow-none`}>
               PNG
             </FillButton>
-            <FillButton type="button" onClick={downloadGif} disabled={!!busy} fill={FILL.ink} textOnFill={FILL.paper} className="rounded-full border-2 border-ink bg-paper-light px-4 py-2 text-[14px] font-medium disabled:opacity-60">
+            <FillButton type="button" onClick={downloadGif} disabled={!!busy} fill={FILL.ink} textOnFill={FILL.paper} className={`${button('quiet', 'sm')} shadow-none disabled:opacity-60`}>
               {busy ?? 'GIF'}
             </FillButton>
           </div>
-          <FillButton type="button" onClick={onAgain} onPointerDown={(e) => e.stopPropagation()} fill={FILL.ink} textOnFill={FILL.paper} className={buttonQuiet}>
+          <FillButton type="button" onClick={onAgain} onPointerDown={(e) => e.stopPropagation()} fill={FILL.ink} textOnFill={FILL.paper} className={button('quiet')}>
             Another cup
           </FillButton>
         </div>
