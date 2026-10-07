@@ -33,6 +33,7 @@ const advectFrag = /* glsl */ `
   uniform vec2 uPour;        // where the stream lands (uv)
   uniform float uPourQ;      // area of foam added per second (uv^2 / s), 0 = not pouring
   uniform float uPourCore;   // stream radius (uv)
+  uniform float uPourReach;  // how far from the stream the spreading reaches (uv)
   void main() {
     vec2 v = texture2D(uVelocity, vUv).xy * uTexel;
     if (uPourQ > 0.0) {
@@ -40,9 +41,39 @@ const advectFrag = /* glsl */ `
       vec2 spread = (uPourQ / 6.2832) * d / (dot(d, d) + uPourCore * uPourCore);
       vec2 c = (vUv - 0.5) * 2.0;
       spread *= max(0.0, 1.0 - dot(c, c)); // nothing moves at the wall
+      spread *= 1.0 - smoothstep(uPourReach * 0.45, uPourReach, length(d)); // and it dies off with distance
       v += spread;
     }
     gl_FragColor = uDissipation * texture2D(uSource, vUv - uDt * v);
+  }
+`;
+
+/*
+  MacCormack correction for the dye: advect forward, advect that result backward, and the gap between
+  the original and the round trip is the error. Adding half of it back cancels most of the smearing
+  that plain advection causes, so milk stays milk instead of greying out. Clamped to the neighbourhood
+  so it can never invent new extremes (that is what keeps it stable). uAmount blends it in (0 = off).
+*/
+const macCormackFrag = /* glsl */ `
+  precision highp float;
+  varying vec2 vUv;
+  uniform sampler2D uSource;
+  uniform sampler2D uForward;
+  uniform sampler2D uBackward;
+  uniform vec2 uDyeTexel;
+  uniform float uAmount;
+  void main() {
+    vec4 fwd = texture2D(uForward, vUv);
+    vec4 src = texture2D(uSource, vUv);
+    vec4 back = texture2D(uBackward, vUv);
+    vec4 col = fwd + 0.5 * uAmount * (src - back);
+    vec4 a = texture2D(uForward, vUv + vec2(uDyeTexel.x, 0.0));
+    vec4 b = texture2D(uForward, vUv - vec2(uDyeTexel.x, 0.0));
+    vec4 c = texture2D(uForward, vUv + vec2(0.0, uDyeTexel.y));
+    vec4 d = texture2D(uForward, vUv - vec2(0.0, uDyeTexel.y));
+    vec4 lo = min(fwd, min(min(a, b), min(c, d)));
+    vec4 hi = max(fwd, max(max(a, b), max(c, d)));
+    gl_FragColor = clamp(col, lo, hi);
   }
 `;
 
@@ -209,10 +240,14 @@ export class Fluid {
   private seed = Math.random() * 100;
   /** How much motion survives each step. Lower = thicker liquid that comes to rest sooner. */
   drag = 0.985;
+  /** How much of the MacCormack correction to apply (0..1): higher keeps milk from smearing away. */
+  keep = 0.5;
+  private dyeForward!: THREE.WebGLRenderTarget;
+  private dyeBackward!: THREE.WebGLRenderTarget;
   private history: THREE.WebGLRenderTarget[] = [];
   private historyIndex = -1;
   private static readonly MAX_HISTORY = 30;
-  private mats: Record<'advect' | 'splat' | 'divergence' | 'pressure' | 'gradient' | 'clear' | 'crema' | 'downsample', THREE.ShaderMaterial>;
+  private mats: Record<'advect' | 'splat' | 'divergence' | 'pressure' | 'gradient' | 'clear' | 'crema' | 'downsample' | 'macCormack', THREE.ShaderMaterial>;
 
   constructor(renderer: THREE.WebGLRenderer, simSize = 128, dyeSize = 512) {
     this.renderer = renderer;
@@ -222,6 +257,8 @@ export class Fluid {
     this.pressure = createDouble(simSize);
     this.divergence = createTarget(simSize);
     this.dye = createDouble(dyeSize);
+    this.dyeForward = createTarget(dyeSize);
+    this.dyeBackward = createTarget(dyeSize);
 
     const texel = new THREE.Vector2(1 / simSize, 1 / simSize);
     this.mats = {
@@ -234,6 +271,14 @@ export class Fluid {
         uPour: { value: new THREE.Vector2(0.5, 0.5) },
         uPourQ: { value: 0 },
         uPourCore: { value: 0.03 },
+        uPourReach: { value: 0.5 },
+      }),
+      macCormack: material(macCormackFrag, {
+        uSource: { value: null },
+        uForward: { value: null },
+        uBackward: { value: null },
+        uDyeTexel: { value: new THREE.Vector2(1 / dyeSize, 1 / dyeSize) },
+        uAmount: { value: 0 },
       }),
       splat: material(splatFrag, {
         uTarget: { value: null },
@@ -298,13 +343,15 @@ export class Fluid {
 
   /**
    * The stream is landing at uv this frame: everything on the surface spreads outward from there.
-   * q = foam area added per second (uv^2 / s), core = the stream's radius (uv).
+   * q = foam area added per second (uv^2 / s), core = the stream's radius (uv),
+   * reach = how far from the stream the spreading is felt (uv).
    */
-  pour(x: number, y: number, q: number, core: number) {
+  pour(x: number, y: number, q: number, core: number, reach: number) {
     const u = this.mats.advect.uniforms;
     u.uPour.value.set(x, y);
     u.uPourQ.value = q;
     u.uPourCore.value = core;
+    u.uPourReach.value = reach;
   }
 
   /** Pour milk at uv: blends the surface toward milk white. */
@@ -432,9 +479,25 @@ export class Fluid {
     this.velocity.swap();
 
     advect.uniforms.uVelocity.value = this.velocity.read.texture;
-    advect.uniforms.uSource.value = this.dye.read.texture;
     advect.uniforms.uDissipation.value = 1.0; // color never fades, it only mixes
-    this.pass(advect, this.dye.write);
+    if (this.keep > 0.001) {
+      // forward, then the round trip back, then the limited correction
+      advect.uniforms.uSource.value = this.dye.read.texture;
+      this.pass(advect, this.dyeForward);
+      advect.uniforms.uDt.value = -dt;
+      advect.uniforms.uSource.value = this.dyeForward.texture;
+      this.pass(advect, this.dyeBackward);
+      advect.uniforms.uDt.value = dt;
+      const mc = this.mats.macCormack;
+      mc.uniforms.uSource.value = this.dye.read.texture;
+      mc.uniforms.uForward.value = this.dyeForward.texture;
+      mc.uniforms.uBackward.value = this.dyeBackward.texture;
+      mc.uniforms.uAmount.value = this.keep;
+      this.pass(mc, this.dye.write);
+    } else {
+      advect.uniforms.uSource.value = this.dye.read.texture;
+      this.pass(advect, this.dye.write);
+    }
     this.dye.swap();
 
     advect.uniforms.uPourQ.value = 0; // the pour is re-declared every frame it is on
@@ -448,6 +511,8 @@ export class Fluid {
       d.write.dispose();
     }
     this.divergence.dispose();
+    this.dyeForward.dispose();
+    this.dyeBackward.dispose();
     this.frameTarget?.dispose();
     this.clearHistory();
     Object.values(this.mats).forEach((m) => m.dispose());

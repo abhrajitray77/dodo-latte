@@ -2,12 +2,6 @@ import { useRef, type ButtonHTMLAttributes, type PointerEvent as ReactPointerEve
 import gsap from 'gsap';
 import { audio } from '../audio/engine';
 
-/**
- * Directional hover fill (ported from the Cream Studio Framer override): a fill layer inside the
- * capsule grows in from whichever edge the pointer entered, and drains out toward the edge it
- * left from. The label colour tweens with it. No CSS :hover, so nothing can flicker.
- */
-
 type Edge = 'top' | 'right' | 'bottom' | 'left';
 
 function edgeFromPointer(rect: DOMRect, x: number, y: number): Edge {

@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { CoffeeScene, type BrushSize } from '../scene/CoffeeScene';
 import Receipt, { type ReceiptState } from './Receipt';
 import Beans from './Beans';
+import PourHint, { HINT_SEEN_KEY } from './PourHint';
+import Slider from './Slider';
 import NoteCard from './NoteCard';
 import { FILL, buttonAccent, buttonPrimary, card, groupLabel, iconButton, pill } from './ui';
 import FillButton from './FillButton';
@@ -80,8 +82,37 @@ export default function Experience() {
   const [history, setHistory] = useState({ undo: false, redo: false });
   const [brush, setBrush] = useState<BrushSize>('xl');
   const [flow, setFlow] = useState(0.5);
+  const [spread, setSpread] = useState(0.5);
+  const [strength, setStrength] = useState(0.5);
   const [receipt, setReceipt] = useState<ReceiptData | null>(null);
   const [sound, setSound] = useState(!audio.muted);
+  const [pourHint, setPourHint] = useState(false);
+  const artTrayRef = useRef<HTMLDivElement>(null);
+  const stirTrayRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
+  const topHintRef = useRef<HTMLDivElement>(null);
+
+  // phones: tell the scene what the header and the controls cover, so the cup is centred between them
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+    const tray = phase === 'art' ? artTrayRef.current : phase === 'stir' ? stirTrayRef.current : null;
+    const apply = () => {
+      const phone = window.innerWidth < 768;
+      const top = phone && tray ? Math.max(headerRef.current?.getBoundingClientRect().bottom ?? 0, topHintRef.current?.getBoundingClientRect().bottom ?? 0) : 0;
+      scene.setInsets(top, phone && tray ? tray.getBoundingClientRect().height : 0);
+    };
+    apply();
+    const ro = new ResizeObserver(apply);
+    if (tray) ro.observe(tray);
+    if (headerRef.current) ro.observe(headerRef.current);
+    if (topHintRef.current) ro.observe(topHintRef.current);
+    window.addEventListener('resize', apply);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', apply);
+    };
+  }, [phase]);
   const [cardSpot, setCardSpot] = useState<CardSpot>('hero');
   const [receiptState, setReceiptState] = useState<ReceiptState>('printing');
 
@@ -120,6 +151,14 @@ export default function Experience() {
     setFlow(value);
     sceneRef.current?.setFlow(value);
   };
+  const changeSpread = (value: number) => {
+    setSpread(value);
+    sceneRef.current?.setSpread(value);
+  };
+  const changeStrength = (value: number) => {
+    setStrength(value);
+    sceneRef.current?.setStrength(value);
+  };
 
   const pickBrush = (size: BrushSize) => {
     setBrush(size);
@@ -152,7 +191,15 @@ export default function Experience() {
     await scene.setMode('top');
     setPhase('art');
     starting.current = false;
+    // first visit only; add ?hint to the URL to see it again
+    try {
+      if (!localStorage.getItem(HINT_SEEN_KEY) || new URLSearchParams(location.search).has('hint')) setPourHint(true);
+    } catch {
+      setPourHint(true);
+    }
     scene.setFlow(flow);
+    scene.setSpread(spread);
+    scene.setStrength(strength);
     scene.setBrushSize(brush);
     scene.setInteraction('paint');
   };
@@ -212,8 +259,23 @@ export default function Experience() {
 
       <canvas ref={canvasRef} className="absolute inset-0 h-full w-full touch-none" />
 
+      {/* First visit: a hand shows the press-and-drag over the coffee */}
+      {phase === 'art' && pourHint && (
+        <PourHint
+          active={active}
+          onDone={() => {
+            setPourHint(false);
+            try {
+              localStorage.setItem(HINT_SEEN_KEY, '1');
+            } catch {
+              /* ignore */
+            }
+          }}
+        />
+      )}
+
       {/* Beans on the table, hero only (they would sit over the cup in the top view) */}
-      <Beans className={`transition-opacity duration-700 ${phase === 'hero' || phase === 'gliding' ? 'opacity-100' : 'opacity-0'}`} />
+      <Beans className={`hidden transition-opacity duration-700 md:block ${phase === 'hero' || phase === 'gliding' ? 'opacity-100' : 'opacity-0'}`} />
 
       {/* Steam: three inked curls rising from the cup, hero only */}
       <svg
@@ -227,28 +289,29 @@ export default function Experience() {
       </svg>
 
       {/* Top bar */}
-      <header className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-5 md:p-7">
-        <div className="flex flex-col items-start gap-2">
-          <div className={`leading-none transition-opacity duration-500 ${phase === 'hero' || phase === 'gliding' ? 'opacity-0' : 'opacity-100'}`}>
-            <p className="text-[16px] font-medium tracking-[-0.01em]">Crema Corner</p>
-            <p className="font-script mt-0.5 text-[21px] leading-none text-ink/80">Latte Art Bar</p>
-          </div>
+      <header ref={headerRef} className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-3 md:p-7">
+        {/* the small lockup once the big title has gone (desktop only; phones keep the space) */}
+        <div className={`hidden leading-none transition-opacity duration-500 md:block ${phase === 'hero' || phase === 'gliding' ? 'opacity-0' : 'opacity-100'}`}>
+          <p className="text-[16px] font-medium tracking-[-0.01em]">Crema Corner</p>
+          <p className="font-script mt-0.5 text-[21px] leading-none text-ink/80">Latte Art Bar</p>
         </div>
-        <div className="flex flex-col items-end gap-2">
+        <div className="ml-auto flex flex-col items-end gap-2">
           <div className="flex items-center gap-2">
-            <div className={`${pill} px-3.5 py-1.5 text-[13px] font-medium`}>
-            {inStep ? (
-              <>
-                <span className="h-2.5 w-2.5 rounded-full border-2 border-ink bg-sage" />
-                <span>
-                  Step {STEP_INDEX[phase]} of 03 <span className="text-ink/50">·</span> {STEP_NAMES[phase]}
-                </span>
-              </>
-            ) : (
-              <span>Made with milk + WebGL</span>
-            )}
+            {/* step chip (compact on phones); "made with" only on desktop */}
+            <div className={`${pill} px-2.5 py-1 text-xs font-medium md:px-3.5 md:py-1.5 md:text-[13px] ${inStep ? '' : 'max-md:hidden'}`}>
+              {inStep ? (
+                <>
+                  <span className="h-2.5 w-2.5 rounded-full border-2 border-ink bg-sage" />
+                  <span className="hidden md:inline">
+                    Step {STEP_INDEX[phase]} of 03 <span className="text-ink/50">·</span> {STEP_NAMES[phase]}
+                  </span>
+                  <span className="md:hidden">{STEP_INDEX[phase]} / 03</span>
+                </>
+              ) : (
+                <span>Made with milk + WebGL</span>
+              )}
             </div>
-          <FillButton
+            <FillButton
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
@@ -256,7 +319,8 @@ export default function Experience() {
               }}
               fill={FILL.faint}
               aria-pressed={sound}
-              className={`${pill} pointer-events-auto relative z-50 px-3.5 py-1.5 text-[13px] font-medium`}
+              aria-label={sound ? 'Sound on' : 'Sound off'}
+              className={`${pill} pointer-events-auto relative z-50 px-2 py-1 text-xs font-medium md:px-3.5 md:py-1.5 md:text-[13px]`}
             >
               <Icon>
                 <path d="M4 10v4h3l4 3.5v-11L7 10H4Z" />
@@ -269,27 +333,27 @@ export default function Experience() {
                   <path d="m15.5 9.5 5 5m0-5-5 5" />
                 )}
               </Icon>
-              {sound ? 'Sound on' : 'Sound off'}
+              <span className="hidden md:inline">{sound ? 'Sound on' : 'Sound off'}</span>
             </FillButton>
           </div>
-          {/* credit: clickable, above everything else */}
+          {/* credit: clickable, above everything else (desktop; phones get a line under the Start button) */}
           <a
             href={PORTFOLIO_URL}
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className={`${pill} pointer-events-auto relative z-50 flex-col items-end gap-0 rounded-2xl px-3.5 py-2 text-[13px] leading-snug`}
+            className={`${pill} pointer-events-auto relative z-50 flex-col items-end gap-0 rounded-2xl px-3.5 py-2 text-[13px] leading-snug max-md:hidden`}
           >
             <span className="flex items-center gap-1.5 font-medium">
-              Built with Astro <Heart />
+              Built with Astro <Heart /> by @abhrajitray
             </span>
-            <span className="text-ink/70">by @abhrajitray</span>
+            <span className="text-ink/70">for Dodo Payments</span>
           </a>
         </div>
       </header>
 
       {(phase === 'art' || phase === 'stir') && (
-        <FillButton type="button" onClick={back} fill={FILL.faint} className={`${pill} absolute top-[4.25rem] left-5 px-4 py-2 text-[14px] font-medium md:top-20 md:left-7`}>
+        <FillButton type="button" onClick={back} fill={FILL.faint} className={`${pill} absolute top-3 left-3 px-3 py-1.5 text-sm font-medium md:top-20 md:left-7 md:px-4 md:py-2 md:text-[14px]`}>
           <Icon>
             <path d="M15 5l-7 7 7 7" />
           </Icon>
@@ -303,10 +367,22 @@ export default function Experience() {
           phase === 'hero' ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-4 opacity-0'
         }`}
       >
-        <p className="text-[17px] text-ink/80">Make your own latte, then keep the receipt.</p>
-        <FillButton type="button" onClick={start} fill={FILL.sage} textOnFill={FILL.ink} className={`${buttonPrimary} px-10 py-4 text-lg focus-visible:ring-2 focus-visible:ring-sage focus-visible:outline-none`}>
+        <p className="text-sm text-ink/80 md:text-[17px]">Make your own latte, then keep the receipt.</p>
+        <FillButton type="button" onClick={start} fill={FILL.sage} textOnFill={FILL.ink} className={`${buttonPrimary} px-8 py-3 text-base md:px-10 md:py-4 md:text-lg focus-visible:ring-2 focus-visible:ring-sage focus-visible:outline-none`}>
           Start pouring
         </FillButton>
+        <a
+          href={PORTFOLIO_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="flex flex-col items-center text-xs leading-snug text-ink/70 md:hidden"
+        >
+          <span className="flex items-center gap-1">
+            Built with Astro <Heart /> by @abhrajitray
+          </span>
+          <span>for Dodo Payments</span>
+        </a>
       </div>
 
       {/* The travelling note card: one spot per step, content crossfades as it moves */}
@@ -341,7 +417,7 @@ export default function Experience() {
         <div className={`transition-opacity duration-500 ${cardSpot === 'stir' ? 'opacity-100' : 'absolute inset-x-0 top-0 opacity-0'}`}>
           <NoteCard step="STEP 02" title="Stir it in" tint="peach" tilt={0} pin="#9fbb9a">
             <p>Drag in circles to swirl the milk through the coffee.</p>
-            <p>Stop whenever you like the pattern, then print your receipt.</p>
+            <p>Stop when you're satisfied, then print your receipt.</p>
           </NoteCard>
         </div>
         <div className={`transition-opacity duration-500 ${cardSpot === 'receipt' ? 'opacity-100' : 'absolute inset-x-0 top-0 opacity-0'}`}>
@@ -355,74 +431,89 @@ export default function Experience() {
         </div>
       </div>
 
-      {/* Latte art controls */}
+      {/* Phones: the step hint sits under the header, above the cup */}
       <div
-        className={`pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center gap-3 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] transition-all duration-500 md:p-7 ${
+        ref={topHintRef}
+        className={`pointer-events-none absolute inset-x-0 top-[3.4rem] flex justify-center px-3 transition-opacity duration-500 md:hidden ${
+          phase === 'art' || (phase === 'stir' && !active) ? 'opacity-100' : 'opacity-0'
+        }`}
+      >
+        <p className={`${pill} px-3 py-1.5 text-center text-xs`}>
+          {phase === 'stir' ? 'Drag in circles to stir' : 'Press and drag to pour. Wiggle for leaves. Pull through for the point.'}
+        </p>
+      </div>
+
+      {/* Latte art controls: two tight rows on phones, one row on desktop */}
+      <div
+        ref={artTrayRef}
+        className={`pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center gap-2 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] transition-all duration-500 md:gap-3 md:p-7 ${
           phase === 'art' ? 'translate-y-0 opacity-100 [&>*]:pointer-events-auto' : 'translate-y-6 opacity-0'
         }`}
       >
-        <p className={`${pill} px-4 py-2 text-[14px] md:hidden`}>Press and drag to pour. Wiggle for leaves. Pull through for the point.</p>
-        <div className={`${card} flex flex-wrap items-end justify-center gap-x-6 gap-y-4 px-5 py-4`}>
-          <div>
-            <span className={groupLabel}>History</span>
-            <div className="flex items-center gap-1 rounded-full border-2 border-ink p-1">
-              <FillButton type="button" fill={FILL.faint} className={iconButton} onClick={() => sceneRef.current?.undo()} disabled={!history.undo} aria-label="Undo" title="Undo (Ctrl+Z)">
-                <UndoIcon />
-              </FillButton>
-              <FillButton type="button" fill={FILL.faint} className={iconButton} onClick={() => sceneRef.current?.redo()} disabled={!history.redo} aria-label="Redo" title="Redo (Ctrl+Shift+Z)">
-                <RedoIcon />
-              </FillButton>
-              <FillButton type="button" fill={FILL.faint} className={iconButton} onClick={() => sceneRef.current?.clearArt()} aria-label="Clear the cup" title="Clear the cup">
-                <Icon>
-                  <path d="M4 7h16" />
-                  <path d="M10 11v6M14 11v6" />
-                  <path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12" />
-                  <path d="M9 7V4h6v3" />
-                </Icon>
-              </FillButton>
-            </div>
-          </div>
-
-          <div>
-            <span className={groupLabel}>Pour size</span>
-            <div className="flex items-center gap-1 rounded-full border-2 border-ink p-1" role="radiogroup" aria-label="Pour size">
-              {BRUSHES.map((b) => (
-                <FillButton
-                  key={b.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={brush === b.id}
-                  aria-label={b.name}
-                  title={b.name}
-                  onClick={() => pickBrush(b.id)}
-                  fill={FILL.faint}
-                  className={`h-10 w-10 rounded-full transition-colors duration-200 ${brush === b.id ? 'bg-ink text-paper' : ''}`}
-                >
-                  <span className="rounded-full bg-current" style={{ width: b.dot, height: b.dot }} />
+        <div className={`${card} flex w-full max-w-[420px] flex-col gap-2.5 px-3 py-2.5 md:w-auto md:max-w-none md:flex-row md:flex-wrap md:items-end md:justify-center md:gap-x-6 md:gap-y-4 md:px-5 md:py-4`}>
+          <div className="flex items-end justify-between gap-3 md:contents">
+            <div>
+              <span className={groupLabel}>History</span>
+              <div className="flex items-center gap-0.5 rounded-full border-2 border-ink p-1 md:gap-1">
+                <FillButton type="button" fill={FILL.faint} className={iconButton} onClick={() => sceneRef.current?.undo()} disabled={!history.undo} aria-label="Undo" title="Undo (Ctrl+Z)">
+                  <UndoIcon />
                 </FillButton>
-              ))}
+                <FillButton type="button" fill={FILL.faint} className={iconButton} onClick={() => sceneRef.current?.redo()} disabled={!history.redo} aria-label="Redo" title="Redo (Ctrl+Shift+Z)">
+                  <RedoIcon />
+                </FillButton>
+                <FillButton type="button" fill={FILL.faint} className={iconButton} onClick={() => sceneRef.current?.clearArt()} aria-label="Clear the cup" title="Clear the cup">
+                  <Icon>
+                    <path d="M4 7h16" />
+                    <path d="M10 11v6M14 11v6" />
+                    <path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12" />
+                    <path d="M9 7V4h6v3" />
+                  </Icon>
+                </FillButton>
+              </div>
+            </div>
+
+            <div>
+              <span className={groupLabel}>Pour size</span>
+              <div className="flex items-center gap-0.5 rounded-full border-2 border-ink p-1 md:gap-1" role="radiogroup" aria-label="Pour size">
+                {BRUSHES.map((b) => (
+                  <FillButton
+                    key={b.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={brush === b.id}
+                    aria-label={b.name}
+                    title={b.name}
+                    onClick={() => pickBrush(b.id)}
+                    fill={FILL.faint}
+                    className={`h-8 w-8 rounded-full transition-colors duration-200 md:h-10 md:w-10 ${brush === b.id ? 'bg-ink text-paper' : ''}`}
+                  >
+                    <span className="rounded-full bg-current" style={{ width: b.dot * 0.8, height: b.dot * 0.8 }} />
+                  </FillButton>
+                ))}
+              </div>
             </div>
           </div>
 
-          <div>
-            <span className={groupLabel}>
-              Flow <span className="font-mono text-ink/50">{Math.round(flow * 100)}%</span>
-            </span>
-            <label className="flex h-12 items-center rounded-full border-2 border-ink px-4">
-              <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.01}
-                value={flow}
-                onChange={(e) => changeFlow(Number(e.target.value))}
-                className="w-32 cursor-pointer accent-sage md:w-40"
-                aria-label="Pour flow"
-              />
-            </label>
+          <div className="grid grid-cols-3 gap-2 md:contents">
+            {(
+              [
+                ['Flow', flow, changeFlow, 'How heavy the pour is'],
+                ['Spread', spread, changeSpread, 'How far the milk spreads out'],
+                ['Strength', strength, changeStrength, 'How much the milk stays instead of dissolving'],
+              ] as Array<[string, number, (v: number) => void, string]>
+            ).map(([name, value, change, title]) => (
+              <div key={name} title={title} className="min-w-0">
+                <span className={groupLabel}>
+                  {name} <span className="font-mono text-ink/50">{Math.round(value * 100)}%</span>
+                </span>
+                <div className="flex h-9 items-center rounded-full border-2 border-ink px-2.5 md:h-12 md:px-4">
+                  <Slider value={value} onChange={change} label={name} className="w-full md:w-32" />
+                </div>
+              </div>
+            ))}
           </div>
 
-          <FillButton type="button" onClick={stir} fill={FILL.ink} textOnFill={FILL.paper} className={`${buttonAccent} h-12 py-0`}>
+          <FillButton type="button" onClick={stir} fill={FILL.ink} textOnFill={FILL.paper} className={`${buttonAccent} h-10 w-full py-0 md:order-last md:h-12 md:w-auto`}>
             Stir it
             <span aria-hidden>→</span>
           </FillButton>
@@ -431,11 +522,11 @@ export default function Experience() {
 
       {/* Stir controls */}
       <div
+        ref={stirTrayRef}
         className={`pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center gap-3 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] transition-all duration-500 md:p-7 ${
           phase === 'stir' ? 'translate-y-0 opacity-100 [&>*]:pointer-events-auto' : 'translate-y-6 opacity-0'
         }`}
       >
-        <p className={`${pill} px-4 py-2 text-[14px] transition-opacity duration-500 md:hidden ${active ? 'opacity-0' : 'opacity-100'}`}>Drag in circles to stir</p>
         <div className={`${card} flex flex-wrap items-end justify-center gap-x-6 gap-y-4 px-5 py-4`}>
           <div>
             <span className={groupLabel}>History</span>

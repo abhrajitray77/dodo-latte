@@ -73,3 +73,28 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .steam path { animation: none; stroke-dashoffset: 0; opacity: 0.7; }
 }
+
+/* First-visit pour hint: ripples spread from the fingertip, the hand taps along */
+.pour-hint-ring {
+  transform-origin: 60px 30px;
+  transform-box: view-box;
+  animation: pour-hint-ripple 1.6s ease-out infinite;
+}
+.pour-hint-ring-2 { animation-delay: 0.5s; }
+.pour-hint-hand {
+  transform-origin: 0 0;
+  transform-box: view-box;
+  animation: pour-hint-tap 1.6s ease-in-out infinite;
+}
+@keyframes pour-hint-ripple {
+  0% { transform: scale(0.6); opacity: 0.9; }
+  100% { transform: scale(4.2); opacity: 0; }
+}
+@keyframes pour-hint-tap {
+  0%, 100% { transform: translate(44px, 26px) scale(1.2); }
+  12% { transform: translate(44px, 29px) scale(1.12); }
+  30% { transform: translate(44px, 26px) scale(1.2); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pour-hint-ring, .pour-hint-hand { animation: none; }
+}

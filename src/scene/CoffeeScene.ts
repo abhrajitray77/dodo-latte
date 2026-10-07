@@ -221,11 +221,16 @@ export class CoffeeScene {
   private interaction: Interaction = 'none';
   private brush: BrushSize = 'xl';
   private flow = 0.5;
+  private spread = 0.5;
+  private strength = 0.5;
   // time-lapse and numbers for the receipt
   private recorder = new Recorder(144);
   private frameBuf = new Uint8Array(144 * 144 * 4);
   private stats = { strokes: 0, pourSeconds: 0, stirSeconds: 0 };
   private paper: PaperSim | null = null;
+  /** CSS px taken by the header and the controls (phones): the top view centres the cup between them. */
+  private topInset = 0;
+  private bottomInset = 0;
   private strokeChanged = false;
   private pendingCheckpoint = 0;
   private onPointer?: (active: boolean) => void;
@@ -354,6 +359,21 @@ export class CoffeeScene {
     this.flow = THREE.MathUtils.clamp(flow, 0, 1);
   }
 
+  /** How far the spreading reaches from the stream, 0..1 (the Spread slider). */
+  setSpread(spread: number) {
+    this.spread = THREE.MathUtils.clamp(spread, 0, 1);
+  }
+
+  /** How much the milk stays instead of dissolving, 0..1 (the Strength slider). */
+  setStrength(strength: number) {
+    this.strength = THREE.MathUtils.clamp(strength, 0, 1);
+    this.fluid.keep = this.strength;
+  }
+
+  private get milkAmount() {
+    return 0.4 + this.strength * 0.6;
+  }
+
   setBrushSize(size: BrushSize) {
     this.brush = size;
   }
@@ -396,7 +416,7 @@ export class CoffeeScene {
     const radius = size * THREE.MathUtils.clamp(1 - dist * 6, 0.6, 1);
     for (let i = 1; i <= n; i++) {
       const t = i / n;
-      this.fluid.addMilk(ax + dx * t, ay + dy * t, 0.85, radius);
+      this.fluid.addMilk(ax + dx * t, ay + dy * t, this.milkAmount, radius);
     }
     const k = this.fluid.simSize * 14;
     this.fluid.addForce(bx, by, dx * k, dy * k, Math.max(0.0012, size * 1.1));
@@ -412,6 +432,13 @@ export class CoffeeScene {
   hidePaper() {
     this.paper?.dispose();
     this.paper = null;
+  }
+
+  setInsets(top: number, bottom: number) {
+    if (top === this.topInset && bottom === this.bottomInset) return;
+    this.topInset = top;
+    this.bottomInset = bottom;
+    this.applyCamera();
   }
 
   /** Everything the receipt needs. Captures a frame first if nothing was recorded yet. */
@@ -481,12 +508,28 @@ export class CoffeeScene {
   }
 
   private applyCamera() {
+    const w = this.canvas.clientWidth || 1;
+    const h = this.canvas.clientHeight || 1;
     const t = this.cam.t;
     const a = CAMERA.hero;
     const b = CAMERA.top;
-    this.camera.position.lerpVectors(a.pos, b.pos, t);
+    // zoom: the hero keeps the cup large; the top view fits the cup body into the width and into
+    // the space left above the controls
+    const heroZoom = w / h < 0.75 ? 0.68 : 1;
+    const usable = Math.max(0.35, (h - this.topInset - this.bottomInset) / h);
+    const topZoom = THREE.MathUtils.clamp(Math.min(1.097 * (w / h), 1.097 * usable), 0.4, 1);
+    this.camera.zoom = THREE.MathUtils.lerp(heroZoom, topZoom, t);
+    // and slide the cup so it sits centred between the header and the controls
+    const dist = b.pos.y - COFFEE_Y;
+    const visible = (2 * dist * Math.tan(THREE.MathUtils.degToRad(b.fov / 2))) / topZoom;
+    const shift = ((this.bottomInset - this.topInset) / 2 / h) * visible * t; // +z is down the screen in the top view
+    const pos = new THREE.Vector3().lerpVectors(a.pos, b.pos, t);
+    const target = new THREE.Vector3().lerpVectors(a.target, b.target, t);
+    pos.z += shift;
+    target.z += shift;
+    this.camera.position.copy(pos);
     this.camera.up.lerpVectors(a.up, b.up, t).normalize();
-    this.camera.lookAt(new THREE.Vector3().lerpVectors(a.target, b.target, t));
+    this.camera.lookAt(target);
     this.camera.fov = THREE.MathUtils.lerp(a.fov, b.fov, t);
     this.camera.updateProjectionMatrix();
     this.updateOutlineScale();
@@ -497,10 +540,7 @@ export class CoffeeScene {
     const h = this.canvas.clientHeight;
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
-    // keep the cup comfortably framed on tall phones
-    this.camera.zoom = w / h < 0.75 ? 0.68 : 1;
-    this.camera.updateProjectionMatrix();
-    this.updateOutlineScale();
+    this.applyCamera();
     this.paper?.resize(w, h);
   };
 
@@ -609,8 +649,8 @@ export class CoffeeScene {
       this.stats.pourSeconds += dt;
       this.recorder.touch(time);
       const size = BRUSH[this.brush];
-      this.fluid.pour(this.lastUv.x, this.lastUv.y, this.flow * size * 90, Math.sqrt(size));
-      this.fluid.addMilk(this.lastUv.x, this.lastUv.y, 0.85, size);
+      this.fluid.pour(this.lastUv.x, this.lastUv.y, this.flow * size * 90, Math.sqrt(size), 0.12 + this.spread * 0.55);
+      this.fluid.addMilk(this.lastUv.x, this.lastUv.y, this.milkAmount, size);
     }
 
     if (this.interaction === 'stir' && this.dragging) {

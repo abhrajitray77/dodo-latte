@@ -13,7 +13,7 @@ export type ReceiptState = 'printing' | 'attached' | 'torn';
 type State = ReceiptState;
 const FPS = 10;
 const HOLD_FRAMES = 10; // pause on the finished cup before the loop restarts
-const PRINTER_TOP = 12;
+const PRINTER_TOP = typeof window !== 'undefined' && window.innerWidth < 768 ? 60 : 12;
 
 /**
  * The receipt UI. The sheet itself is simulated and drawn by the scene (PaperSim); this component
@@ -44,7 +44,9 @@ export default function Receipt({
   const [busy, setBusy] = useState<string | null>(null);
 
   // as big as the screen allows, up to 1.4x the base design
-  const scale = Math.min(1.4, (window.innerWidth - 40) / RECEIPT_WIDTH, (window.innerHeight - 150) / RECEIPT_HEIGHT);
+  // the printer art is 100px wider than the paper and must fit the screen too
+  const phone = window.innerWidth < 768;
+  const scale = Math.min(phone ? 1 : 1.4, (window.innerWidth - 116) / RECEIPT_WIDTH, (window.innerHeight - (phone ? 330 : 150)) / RECEIPT_HEIGHT);
   const width = RECEIPT_WIDTH * scale;
   const height = RECEIPT_HEIGHT * scale;
   // the printer artwork is a little wider than the paper; the paper starts at its slot
@@ -186,7 +188,7 @@ export default function Receipt({
 
       {/* hints and actions */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center gap-3 p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
-        <p className={`${pill} px-4 py-2 text-[14px] transition-opacity duration-500 md:hidden ${state === 'attached' ? 'opacity-100' : 'opacity-0'}`}>Grab the receipt and pull it off</p>
+        <p className={`${pill} px-3 py-1.5 text-xs transition-opacity duration-500 md:hidden ${state === 'attached' ? 'opacity-100' : 'opacity-0'}`}>Grab the receipt and pull it off</p>
         <div className={`flex flex-wrap justify-center gap-3 transition-all duration-500 ${state === 'torn' ? 'pointer-events-auto translate-y-0 opacity-100' : 'translate-y-4 opacity-0'}`}>
           <div className={`${pill} cursor-default gap-2 pl-4`} onPointerDown={(e) => e.stopPropagation()}>
             <span className="text-[14px] font-medium text-ink/70">Save receipt</span>

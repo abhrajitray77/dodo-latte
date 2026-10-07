@@ -26,10 +26,15 @@ const TEAR_STEP = 20;
 const GRAVITY = 1800; // px / s^2
 const DAMPING = 0.955; // paper in air, not a spring
 const ITERATIONS = 14;
-/** Strain under the pins (fraction of rest length) beyond which the paper slips in the fingers. */
+/** Strain under the pins beyond which the paper slips in the fingers: 8% of a row, or 4px, whichever is larger. */
 const SLIP_STRAIN = 0.08;
-/** How quickly the grip relaxes back toward the hanging sheet while it slips (per frame). */
-const SLIP_RATE = 0.3;
+const SLIP_SLACK_PX = 4;
+/** How quickly the grip relaxes back toward the hanging sheet while it slips (per second, at full strain excess). */
+const SLIP_RATE = 14;
+/** How firmly the fingers hold the grip point to the hand each solver pass (1 = rigid). */
+const GRIP_PULL = 0.55;
+/** The sim runs at a fixed rate so phones at 120Hz and laptops at 60Hz feel the same. */
+const STEP = 1 / 60;
 
 const paperVertex = /* glsl */ `
   varying vec2 vUv;
@@ -87,6 +92,7 @@ export class PaperSim {
   private releaseAt = 0;
   // once torn off, the sheet moves as one stiff piece: centre + tilt, blended in from the cloth pose
   private rigid = { cx: 0, cy: 0, angle: 0, blend: 1, from: null as Float32Array | null };
+  private accumulator = 0;
   private restCentre = new THREE.Vector2();
   private lastPointer = new THREE.Vector2();
   private handVel = new THREE.Vector2();
@@ -298,9 +304,17 @@ export class PaperSim {
   }
 
   update(dt: number) {
+    // fixed-rate substeps (at most three, so a stalled tab does not try to catch up forever)
+    this.accumulator = Math.min(this.accumulator + dt, STEP * 3);
+    while (this.accumulator >= STEP) {
+      this.accumulator -= STEP;
+      this.step(STEP);
+    }
+  }
+
+  private step(dt: number) {
     this.time += dt;
     const n = COLS * ROWS;
-    dt = Math.min(dt, 1 / 30);
 
     // the printer feeds the sheet out as one rigid piece
     if (this.mode === 'printing') {
@@ -392,8 +406,9 @@ export class PaperSim {
         this.pos[k * 2 + 1] = this.rest[k * 2 + 1];
       }
       if (this.grabbed >= 0 && this.mode === 'hanging') {
-        this.pos[g] = this.pointer.x + this.grabOffset.x;
-        this.pos[g + 1] = this.pointer.y + this.grabOffset.y;
+        // a firm but not rigid hold, so the grip cannot flip between two states frame to frame
+        this.pos[g] += (this.pointer.x + this.grabOffset.x - this.pos[g]) * GRIP_PULL;
+        this.pos[g + 1] += (this.pointer.y + this.grabOffset.y - this.pos[g + 1]) * GRIP_PULL;
       }
       // the printer housing is solid: nothing can rise back above the slot
       for (let k = 0; k < n; k++) {
@@ -408,15 +423,19 @@ export class PaperSim {
         if (!this.pinned[c]) continue;
         const a = c * 2;
         const b = (c + COLS) * 2;
+        const rest = this.opts.height / (ROWS - 1);
         const d = Math.hypot(this.pos[b] - this.pos[a], this.pos[b + 1] - this.pos[a + 1]);
-        strain = Math.max(strain, d / (this.opts.height / (ROWS - 1)) - 1);
+        strain = Math.max(strain, (d - rest) / Math.max(rest * SLIP_STRAIN, SLIP_SLACK_PX));
       }
       const targetY = this.pointer.y + this.grabOffset.y;
-      if (strain > SLIP_STRAIN || targetY < this.opts.slotY + 8) {
-        // relax the grip toward where this point hangs at rest
+      // slip in proportion to how far past the limit the strain is (smooth, no on/off flicker),
+      // and fully if the hand tries to push the paper up into the housing
+      const excess = targetY < this.opts.slotY + 8 ? 1 : Math.min(1, Math.max(0, strain - 1));
+      if (excess > 0) {
+        const k = 1 - Math.exp(-dt * SLIP_RATE * excess);
         const tx = this.pointer.x + this.grabOffset.x;
-        this.grabOffset.x += (this.rest[g] - tx) * SLIP_RATE;
-        this.grabOffset.y += (this.rest[g + 1] - targetY) * SLIP_RATE;
+        this.grabOffset.x += (this.rest[g] - tx) * k;
+        this.grabOffset.y += (this.rest[g + 1] - targetY) * k;
       }
     }
     this.upload();

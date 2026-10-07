@@ -33,10 +33,10 @@ export default function Printer({ width, top }: { width: number; top: number }) 
       <rect x={476} y={28} width={16} height={38} rx={3} fill={TRIM} stroke={INK} strokeWidth={2.2} />
       <rect x={40} y={12} width={440} height={70} rx={10} fill={SHELL} stroke={INK} strokeWidth={3} />
       <rect x={52} y={22} width={416} height={50} rx={6} fill="none" stroke={INK} strokeWidth={1.6} />
-      <text x={260} y={48} textAnchor="middle" fill={INK} style={{ font: '500 28px "Apfel Grotezk", Inter, ui-sans-serif, system-ui, sans-serif', letterSpacing: '-0.5px' }}>
+      <text x={260} y={43} textAnchor="middle" fill={INK} style={{ font: '500 26px "Apfel Grotezk", Inter, ui-sans-serif, system-ui, sans-serif', letterSpacing: '-0.5px' }}>
         Crema Corner
       </text>
-      <text x={260} y={72} textAnchor="middle" fill={INK} opacity={0.85} style={{ font: '600 21px Caveat, "Segoe Script", cursive' }}>
+      <text x={260} y={63} textAnchor="middle" fill={INK} opacity={0.85} style={{ font: '600 18px Caveat, "Segoe Script", cursive' }}>
         Latte Art Bar
       </text>
       <circle cx={446} cy={47} r={5} fill={JADE} stroke={INK} strokeWidth={1.6} />
