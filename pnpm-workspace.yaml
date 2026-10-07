@@ -1,3 +1,11 @@
+# Single-package repo. The root is the only workspace package, which keeps older pnpm (Cloudflare
+# Pages ships 10.11) happy. Both spellings of the build-script allow list are kept: `allowBuilds`
+# for newer pnpm, `onlyBuiltDependencies` for 10.11, so esbuild and sharp still get their binaries.
+packages:
+  - '.'
+onlyBuiltDependencies:
+  - esbuild
+  - sharp
 allowBuilds:
   esbuild: true
   sharp: true
